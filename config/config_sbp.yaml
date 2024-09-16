@@ -1,0 +1,26 @@
+# Path to the dataset directory
+data_dir: '/data/astro/scratch/lcabayol/NFphotoz/data/CFHT_sims_v3'
+
+# Specify if the dataset contains multiple exposures or single exposure
+multiple_exposures: True
+nexp: 3
+
+# List of photometric bands to be used
+bands: 
+  - 'CFHT_U'
+  - 'CFHT_G'
+  - 'CFHT_R'
+  - 'CFHT_I'
+  - 'CFHT_Z'
+
+# Zero-point calibration value, set to None if not used
+zp_calib: False
+
+# Dictionary of hyperparameters
+hyperparams:
+  batch_size: 20          # Number of samples per batch during training
+  nepochs: 50             # Number of training epochs
+  learning_rate: 0.001    # Learning rate for the optimizer
+
+# Path where the trained model should be saved
+output_model: '/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_mexp.pt'

@@ -28,13 +28,14 @@ def create_dataloaders(path_data,
     """
 
     # Create a DataSet instance based on the provided dataset directory
-    print(file_type)
     dset = DataSet(data_dir=path_data,
                    bands=bands,
                    multiple_exps=True,
                    nexp=nexp,
                    zp_calib=zp_calib,
                    file_type=file_type)
+
+
 
     # Split the dataset into training and test sets
     if test_size<len(dset):

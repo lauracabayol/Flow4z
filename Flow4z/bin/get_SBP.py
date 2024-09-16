@@ -19,6 +19,7 @@ def main():
 
     # Initialize SBP object and call process_catalog
     sbp = SBP(model_path=model_path)
+    print('Module initialized')
     flux_predictions, true_fluxes = sbp.process_catalog(data_dir)
 
     cat = pd.DataFrame(np.c_[flux_predictions, true_fluxes], ['pred','true'])

@@ -115,7 +115,7 @@ class SBP:
 
         
         if self.zp_calib is not None:
-            flux, logalpha, logsig, features = self.model(image.to(self.device), self.zp_calib.to(self.device))
+            flux, logalpha, logsig, features = self.model(image.to(self.device), self.zp_calib)
         else:
             flux, logalpha, logsig, features = self.model(image.to(self.device))
 
@@ -175,10 +175,11 @@ class SBP:
                                     bands = self.bands,
                                     batch_size=20,
                                     zp_calib=self.zp_calib,
-                                    file_type='image')
-        
+                                    file_type='image',
+                                   test_size=1000)
+
+        print('loaders created')        
         for m, stamp, max_norm in loader:
-            print(m.shape)
             stamp = stamp.reshape(len(stamp) * len(self.bands), 3, 60, 60).unsqueeze(1).float().to(self.device)
             max_norm = max_norm.reshape(len(max_norm) * len(self.bands))
             
