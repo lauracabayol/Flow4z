@@ -11,25 +11,23 @@ authors = [
 maintainers = [
     { name="Laura Cabayol-Garcia", email="lcabayol@pic.es" },
 ]
-description = "Normalizing flow to "
+description = "Normalizing flow to predict photometry and photo-z from astronomical images"
 readme = "README.md"
 keywords = [
-    "Lyman-alpha", "Cosmology", "Power Spectrum", "Emulator",
+    "Cosmology", "Generative AI", "Photometry", "redshift"
 ]
 requires-python = ">= 3.10"
 dependencies = [
     "numpy",
     "pandas",
     "scipy",
-    "h5py",
-    "scikit-learn",
     "matplotlib",
     "configobj",
-    "camb",
     "torch",
-    "scikit-fda",
     "jupyterlab",
-    "jupytext"
+    "jupytext",
+    "argparse",
+    "tqdm"
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -47,30 +45,12 @@ test = [
   "pytest",
 ]
 
-gpy = [
-    "GPy==1.13.1",
-]
-explicit = [
-    "numpy==1.24.4",
-    "pandas==2.1.4",
-    "scipy==1.11.4",
-    "h5py==3.10.0",
-    "scikit-learn==1.3.2",
-    "matplotlib==3.8.2",
-    "configobj==5.0.8",
-    "camb==1.5.4",
-    "torch==2.1.2",
-    "scikit-fda==0.9",
-    "GPy==1.13.1",
-    "jupyterlab"    
-]
-
 [tool.setuptools.packages.find]
-include = ["lace","lace.*"]
+include = ["Flow4z","Flow4z.*"]
 namespaces = false
 
 
 [project.urls]
-Homepage="https://github.com/igmhub/LaCE"
-Repository="https://github.com/igmhub/LaCE.git"
-Issues="https://github.com/igmhub/LaCE/issues"
+Homepage="https://github.com/lauracabayol/Flow4z"
+Repository="https://github.com/lauracabayol/Flow4z.git"
+Issues="https://github.com/lauracabayol/Flow4z/issues"
