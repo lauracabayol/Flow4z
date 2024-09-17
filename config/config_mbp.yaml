@@ -1,12 +1,25 @@
 model_path_sbp: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_SBP_v2_mexp.pt"
-data_dir_path: "/data/astro/scratch/lcabayol/NFphotoz/data/CFHT_sims_v2"
-nepochs: 100
-lr: 0.001
-batch_size: 100
+data_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/CFHT_sims_v2"
+photometry_type: 'MBP'
+
+multiple_exposures: True
 nexp: 3
+zp_calib: False
 verbose: true
-save_path: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_MBP_mexp_v2.pt"
+output_model: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_MBP_mexp_v2.pt"
 file_type: "features"
 flow_type: "affine"
 predict_photoz: False
 ntransformation: 8
+bands: 
+  - 'CFHT_U'
+  - 'CFHT_G'
+  - 'CFHT_R'
+  - 'CFHT_I'
+  - 'CFHT_Z'
+
+# Dictionary of hyperparameters
+hyperparams:
+  batch_size: 100         # Number of samples per batch during training
+  nepochs: 50             # Number of training epochs
+  learning_rate: 0.001    # Learning rate for the optimizer

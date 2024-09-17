@@ -25,10 +25,6 @@ from dataloader import create_dataloaders
 class MBPz:
     def __init__(self, 
                  model_path_sbp, 
-                 data_dir_path,
-                 nepochs=100,
-                 lr=1e-3,
-                 batch_size=100,
                  nexp=3,
                  verbose=True,
                  model_path_normflow=None,
@@ -42,10 +38,6 @@ class MBPz:
 
         Arguments:
         - model_path_sbp (str): Path to the pre-trained SBP model checkpoint.
-        - data_dir_path (str): Path to the directory containing the dataset.
-        - nepochs (int): Number of epochs for training. Default is 100.
-        - lr (float): Learning rate for the optimizer. Default is 1e-3.
-        - batch_size (int): Number of samples per batch. Default is 100.
         - nexp (int): Number of exposure samples to generate. Default is 3.
         - verbose (bool): If True, print detailed logs during training. Default is True.
         - model_path_normflow (str or None): Path to a pre-trained normalizing flow model, if available. Default is None.
@@ -59,8 +51,6 @@ class MBPz:
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.file_type = file_type
         self.nexp = nexp
-        self.data_dir_path = data_dir_path
-        self.batch_size = batch_size
         self.ntransformation = ntransformation
         self.flow_type = flow_type
         self.predict_photoz = predict_photoz
@@ -99,13 +89,10 @@ class MBPz:
             print("Loaded pre-trained normalizing flow model.")
         self.normflow = self.normflow.to(self.device)
         
-        # Hyperparameters
-        self.nepochs = nepochs
-        self.lr = lr
-
+        
         print("MBPz model initialized.")
 
-    def _train_model(self):
+    def train(self, data_dir, training_hyperparams):
         """
         Trains the normalizing flow model using the provided data.
     
@@ -115,24 +102,24 @@ class MBPz:
         print("Creating data loaders...")
         mlflow.autolog()  # Enable autologging of parameters, models, etc.
         
-        loader_train, loader_val = create_dataloaders(self.data_dir_path, 
+        loader_train, loader_val = create_dataloaders(data_dir, 
                                                       self.bands,
                                                       nexp=self.nexp,
-                                                      batch_size=self.batch_size,
+                                                      batch_size=training_hyperparams['batch_size'],
                                                       file_type=self.file_type)
     
-        optimizer = optim.Adam(self.normflow.parameters(), lr=self.lr)  
+        optimizer = optim.Adam(self.normflow.parameters(), lr=training_hyperparams['learning_rate'])  
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=150, gamma=0.1)
     
         with mlflow.start_run() as run:
             mlflow.set_tag("project", "Flow4z:MBP")
-            mlflow.set_tag("input directory", f"{self.data_dir_path}")
+            mlflow.set_tag("input directory", f"{data_dir}")
             mlflow.set_tag("Model_SBP", f"{self.model_path_sbp}")
     
             # Log parameters for the run
-            mlflow.log_param("learning_rate", self.lr)
-            mlflow.log_param("batch_size", self.batch_size)
-            mlflow.log_param("nepochs", self.nepochs)
+            mlflow.log_param("learning_rate", training_hyperparams['learning_rate'])
+            mlflow.log_param("batch_size", training_hyperparams['batch_size'])
+            mlflow.log_param("nepochs", training_hyperparams['nepochs'])
             mlflow.log_param("nexp", self.nexp)
     
             mlflow.pytorch.log_model(self.normflow, "MBP-NF")
@@ -145,10 +132,10 @@ class MBPz:
             except MlflowException as e:
                 print(f"Error registering model: {e}")
     
-            print(f"Starting training for {self.nepochs} epochs...")
+            print(f"Starting training for {training_hyperparams['nepochs']} epochs...")
             
             # Training loop
-            for epoch in tqdm(range(self.nepochs), desc="Training Progress"):
+            for epoch in tqdm(range(training_hyperparams['nepochs']), desc="Training Progress"):
                 epoch_loss = 0.0  # Accumulate the loss for the epoch
                 for meta, data, max_norm in loader_train:
                     optimizer.zero_grad()
@@ -191,7 +178,7 @@ class MBPz:
                 mlflow.log_metric("epoch_loss", epoch_loss, step=epoch)
     
                 if self.verbose:
-                    print(f"Epoch [{epoch+1}/{self.nepochs}], Loss: {epoch_loss:.4f}")
+                    print(f"Epoch [{epoch+1}/{training_hyperparams['nepochs']}], Loss: {epoch_loss:.4f}")
            
             self.save_model()
     
@@ -252,7 +239,7 @@ class MBPz:
                                          bands=self.bands,
                                          file_type=self.file_type)
         
-        nobj = len(os.listdir(self.data_dir_path))
+        nobj = len(os.listdir(data_dir))
         preds_all = np.zeros((nobj, Nrealizations, self.input_dim))
         
         for samp, (meta, features, max_norm) in enumerate(tqdm(loader_test, desc="Prediction Progress")):

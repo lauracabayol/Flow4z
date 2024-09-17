@@ -1,6 +1,7 @@
 model_path: null
 # Path to the dataset directory
 data_dir: '/data/astro/scratch/lcabayol/NFphotoz/data/CFHT_sims_v2'
+photometry_type: 'SBP'
 
 # Specify if the dataset contains multiple exposures or single exposure
 multiple_exposures: True
