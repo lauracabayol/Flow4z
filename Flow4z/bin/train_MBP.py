@@ -11,7 +11,6 @@ sys.path.append('../bookkeeper')
 sys.path.append('../data')
 sys.path.append('../utils')
 
-from SBP import predict_flux
 from SBP_models import SBP_model_multExp
 from MBP_models import NF_model_MBP
 from dataloader import create_dataloaders
@@ -47,6 +46,8 @@ def main():
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
+        print(sys.argv)
+        print(len(sys.argv))
         print("Usage: python run_mbpz.py <config_file.yaml>")
         sys.exit(1)
     main()

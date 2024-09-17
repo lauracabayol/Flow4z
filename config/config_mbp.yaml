@@ -1,11 +1,11 @@
-model_path_sbp: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_SBP_mexp.pt"
-data_dir_path: "/data/astro/scratch/lcabayol/NFphotoz/data/CFHT_sims_v3"
+model_path_sbp: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_SBP_v2_mexp.pt"
+data_dir_path: "/data/astro/scratch/lcabayol/NFphotoz/data/CFHT_sims_v2"
 nepochs: 100
 lr: 0.001
 batch_size: 100
 nexp: 3
 verbose: true
-save_path: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_MBP_mexp.pt"
+save_path: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_MBP_mexp_v2.pt"
 file_type: "features"
 flow_type: "affine"
 predict_photoz: False

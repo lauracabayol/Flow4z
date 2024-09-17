@@ -6,6 +6,10 @@ import time
 import os
 import sys
 from tqdm import tqdm  # Progress bar
+import mlflow
+import mlflow.pytorch
+from mlflow.exceptions import MlflowException
+mlflow.set_tracking_uri("http://127.0.0.1:5000")
 
 # Assuming necessary imports for SBP_model_multExp, NF_model_MBP, etc.
 sys.path.append('../SBP')
@@ -14,7 +18,6 @@ sys.path.append('../bookkeeper')
 sys.path.append('../data')
 sys.path.append('../utils')
 
-from SBP import predict_flux
 from SBP_models import SBP_model_multExp
 from MBP_models import NF_model_MBP
 from dataloader import create_dataloaders
@@ -63,6 +66,8 @@ class MBPz:
         self.predict_photoz = predict_photoz
         self.save_path = save_path
         self.verbose = verbose
+
+        self.model_path_sbp=model_path_sbp
         
         # Initialize SBP model
         print("Loading SBP model...")
@@ -70,6 +75,8 @@ class MBPz:
         model_sbp = SBP_model_multExp(zp_calib=checkpoint['metadata']['model_metadata']['zp_calib'])
         model_sbp.load_state_dict(checkpoint['model_state_dict'])
         self.model_sbp = model_sbp.eval().to(self.device)  # Set the model to evaluation mode
+
+        
     
         # Retrieve zp_calib from model metadata
         zp_calib = checkpoint['metadata']['model_metadata']['zp_calib']
@@ -101,67 +108,96 @@ class MBPz:
     def _train_model(self):
         """
         Trains the normalizing flow model using the provided data.
-
+    
         Arguments:
         None (all necessary parameters are initialized in the __init__ method).
         """
         print("Creating data loaders...")
+        mlflow.autolog()  # Enable autologging of parameters, models, etc.
+        
         loader_train, loader_val = create_dataloaders(self.data_dir_path, 
                                                       self.bands,
                                                       nexp=self.nexp,
                                                       batch_size=self.batch_size,
                                                       file_type=self.file_type)
-        
+    
         optimizer = optim.Adam(self.normflow.parameters(), lr=self.lr)  
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=150, gamma=0.1)
-
-        print(f"Starting training for {self.nepochs} epochs...")
-        for epoch in tqdm(range(self.nepochs), desc="Training Progress"):
-            epoch_loss = 0.0  # To accumulate loss for the epoch
-            for meta, data, max_norm in loader_train:
-                optimizer.zero_grad()
-                if self.file_type=='image':
-                    features = torch.zeros(size=(len(data), self.nbands, 10))
-                    flab = meta[:, :, 0, 1] / max_norm[:, :, 0]
-                    for b in range(self.nbands):
-                        f, feature = predict_flux(self.model_sbp, data[:, b, :, :].unsqueeze(1))
-                        features[:, b, :] = feature.detach()
-                    features = features.reshape(len(features), self.nbands * 10) 
-                elif self.file_type=='features':
+    
+        with mlflow.start_run() as run:
+            mlflow.set_tag("project", "Flow4z:MBP")
+            mlflow.set_tag("input directory", f"{self.data_dir_path}")
+            mlflow.set_tag("Model_SBP", f"{self.model_path_sbp}")
+    
+            # Log parameters for the run
+            mlflow.log_param("learning_rate", self.lr)
+            mlflow.log_param("batch_size", self.batch_size)
+            mlflow.log_param("nepochs", self.nepochs)
+            mlflow.log_param("nexp", self.nexp)
+    
+            mlflow.pytorch.log_model(self.normflow, "MBP-NF")
+    
+            # Register the model
+            try:
+                model_uri = f"runs:/{run.info.run_id}/model"
+                mlflow.register_model(model_uri, "Flow4z:MBP")
+                print(f"Model registered in the Model Registry under 'Flow4z:MBP'")
+            except MlflowException as e:
+                print(f"Error registering model: {e}")
+    
+            print(f"Starting training for {self.nepochs} epochs...")
+            
+            # Training loop
+            for epoch in tqdm(range(self.nepochs), desc="Training Progress"):
+                epoch_loss = 0.0  # Accumulate the loss for the epoch
+                for meta, data, max_norm in loader_train:
                     optimizer.zero_grad()
-                    flab = meta[:, :, 1] / max_norm
-                    features = data.reshape(len(data), self.nbands * 10) 
-            
-                if self.predict_photoz:
-                    input_nf = torch.cat((flab, meta[:, 0:1, 1]), dim=1) 
-                else:
-                    input_nf = flab
+    
+                    if self.file_type == 'image':
+                        features = torch.zeros(size=(len(data), self.nbands, 10))
+                        flab = meta[:, :, 0, 1] / max_norm[:, :, 0]
+                        for b in range(self.nbands):
+                            f, feature = predict_flux(self.model_sbp, data[:, b, :, :].unsqueeze(1))
+                            features[:, b, :] = feature.detach()
+                        features = features.reshape(len(features), self.nbands * 10)
+                    elif self.file_type == 'features':
+                        optimizer.zero_grad()
+                        flab = meta[:, :, 1] / max_norm
+                        features = data.reshape(len(data), self.nbands * 10)
+    
+                    if self.predict_photoz:
+                        input_nf = torch.cat((flab, meta[:, 0:1, 1]), dim=1)
+                    else:
+                        input_nf = flab
+    
+                    if self.flow_type == 'affine':
+                        z, log_jac_det = self.normflow(input_nf.to(self.device), features.to(self.device))
+                        loss = 0.5 * torch.sum(z**2, 1) - log_jac_det
+                        loss = loss.mean()
+                    elif self.flow_type == 'gaussianization':
+                        input_nf = torch.DoubleTensor(input_nf)
+                        log_pdf, _, _ = self.normflow(input_nf.to(self.device), 
+                                                      conditional_input=features.to(self.device))
+                        loss = -log_pdf.mean()
+    
+                    loss.backward()
+                    optimizer.step()
+    
+                    epoch_loss += loss.item()  # Accumulate loss for this epoch
                 
-                if self.flow_type == 'affine':
-                    z, log_jac_det = self.normflow(input_nf.to(self.device), features.to(self.device))
-                    loss = 0.5 * torch.sum(z**2, 1) - log_jac_det
-                    loss = loss.mean()
-                elif self.flow_type == 'gaussianization':
-                    input_nf = torch.DoubleTensor(input_nf)
-                    log_pdf, _, _ = self.normflow(input_nf.to(self.device), 
-                                                  conditional_input=features.to(self.device))
-                    loss = -log_pdf.mean()
-                    
-                loss.backward()
-                optimizer.step()
-                
-                epoch_loss += loss.item()  # Accumulate loss for reporting
-
-            scheduler.step()
-
-            if self.verbose:
-                print(f"Epoch [{epoch+1}/{self.nepochs}], Loss: {epoch_loss:.4f}")
-   
-            
-                
+                scheduler.step()
+    
+                # Log loss as a metric after each epoch
+                mlflow.log_metric("epoch_loss", epoch_loss, step=epoch)
+    
+                if self.verbose:
+                    print(f"Epoch [{epoch+1}/{self.nepochs}], Loss: {epoch_loss:.4f}")
+           
             self.save_model()
-
-        print("Training completed.")
+    
+            # Optionally log and register the final model
+            mlflow.pytorch.log_model(self.normflow, "Flow4z_MBP_Final")
+            print("Training completed.")
 
     def save_model(self):
         """

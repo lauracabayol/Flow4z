@@ -31,7 +31,7 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Device set to: {device}")
 
-    sbp_trainer = SBP(model_path = =config['model_path'],
+    sbp_trainer = SBP(model_path = config['model_path'],
                       zp_calib=config['zp_calib'],
                       nexp = config['nexp'],
                       bands = config['bands']
@@ -42,7 +42,7 @@ def main():
     trained_model = sbp_trainer.train(
         data_dir=config['data_dir'],
         training_hyperparams=config['hyperparams'])
-    )
+    
     print("Model training completed.")
 
     # Prepare metadata including logs

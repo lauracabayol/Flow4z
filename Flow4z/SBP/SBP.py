@@ -7,6 +7,11 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm  
 
+import mlflow
+import mlflow.pytorch
+from mlflow.exceptions import MlflowException
+mlflow.set_tracking_uri("http://127.0.0.1:5000")
+
 # Custom modules
 sys.path.append('../data')
 from dataset import DataSet
@@ -51,19 +56,17 @@ class SBP:
             self.zp_calib=zp_calib
             self.nexp=nexp
             
-
     def train(self, data_dir, training_hyperparams):
-
+        mlflow.autolog()
+        
         nepochs = training_hyperparams['nepochs']
         batch_size = training_hyperparams['batch_size']
         lr = training_hyperparams['learning_rate']
-
         
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=150, gamma=0.1)
         nbands = len(self.bands)
 
-        
         loader_train, loader_val = create_dataloaders(
             path_data=data_dir,
             bands=self.bands,
@@ -72,47 +75,80 @@ class SBP:
             nexp=self.nexp,
             file_type='image'
         )
+
+        with mlflow.start_run() as run:
+            mlflow.set_tag("project", "Flow4z:SBP")
+            mlflow.set_tag("input directory", f"{data_dir}")
+            mlflow.set_tag("zp_calib", f"{zp_calib}")
+
+            mlflow.log_param("learning_rate", lr)
+            mlflow.log_param("batch_size", batch_size)
+            mlflow.log_param("nepochs", nepochs)
+            mlflow.log_param("nexp", nexp)
+
+            mlflow.sklearn.log_model(self.model, "SBP-CNN")
             
-        for epoch in range(nepochs):
-            progress_bar = tqdm(loader_train, desc=f"Epoch {epoch + 1}/{nepochs}", unit="epoch")
+            # Register the model in the registry (this creates a new version if it exists)
+            try:
+                model_uri = f"runs:/{run.info.run_id}/model"
+                mlflow.register_model(model_uri, "Flow4z:SBP")
+                print(f"Model registered in the Model Registry under 'Testing_MLFlow'")
+            except MlflowException as e:
+                print(f"Error registering model: {e}")
+                        
+            for epoch in range(nepochs):
+                progress_bar = tqdm(loader_train, desc=f"Epoch {epoch + 1}/{nepochs}", unit="epoch")
 
-            for meta, stamp, max_norm in progress_bar:
-                optimizer.zero_grad()
+                for meta, stamp, max_norm in progress_bar:
+                    optimizer.zero_grad()
 
-                meta = meta.squeeze(1)
-                z, lab, zp = meta[:, :, 0], meta[:, :, 1], meta[:, :, 2]
-                lab = lab / max_norm
-                stamp = stamp.reshape(len(stamp) * nbands, stamp.shape[2], 60, 60).unsqueeze(1).float()
-                lab = lab[:,:,0].reshape(len(lab) * nbands).unsqueeze(1)
+                    meta = meta.squeeze(1)
+                    
+                    z, lab = meta[:, :, :, 0], meta[:, :, :, 1]
+                    lab = lab / max_norm
+                    stamp = stamp.reshape(len(stamp) * nbands, stamp.shape[2], 60, 60).unsqueeze(1).float()
+                    lab = lab[:,:,0].reshape(len(lab) * nbands).unsqueeze(1)
 
-                if self.zp_calib:
-                    zp = zp * torch.normal(1, zp_calib/100, size=zp.shape)
-                    zp = zp.reshape(len(zp) * nexp)
-                
-                if self.zp_calib:
-                    flux, logalpha, logsig, _ = self.model(stamp.to(self.device), zp.to(self.device))
-                else:
-                    flux, logalpha, logsig, _ = self.model(stamp.to(self.device))
+                    if self.zp_calib:
+                        zp = meta[:, :, :, 2]
+                        zp = zp * torch.normal(1, self.zp_calib / 100, size=zp.shape)
+                        zp = zp.reshape(len(zp) * self.nexp)
 
-                logsig = torch.clamp(logsig, -6, 6)
-                sig = torch.exp(logsig)
+                    if self.zp_calib:
+                        flux, logalpha, logsig, _ = self.model(stamp.to(self.device), zp.to(self.device))
+                    else:
+                        flux, logalpha, logsig, _ = self.model(stamp.to(self.device))
 
-                log_prob = logalpha - 0.5 * (flux - lab.to(self.device)).pow(2) / sig.pow(2) - logsig
-                log_prob = torch.logsumexp(log_prob, 1)
-                loss = -log_prob.mean()
+                    logsig = torch.clamp(logsig, -6, 6)
+                    sig = torch.exp(logsig)
 
-                loss.backward()
-                optimizer.step()
+                    log_prob = logalpha - 0.5 * (flux - lab.to(self.device)).pow(2) / sig.pow(2) - logsig
+                    log_prob = torch.logsumexp(log_prob, 1)
+                    loss = -log_prob.mean()
 
-                progress_bar.set_postfix(loss=loss.item())
-                
-            scheduler.step()
-            print(f'Epoch {epoch + 1}/{self.nepochs} completed. Median loss: {np.median(loss.detach().cpu().numpy())}')
-        
+                    loss.backward()
+                    optimizer.step()
+
+                    progress_bar.set_postfix(loss=loss.item())
+                    
+                    mlflow.log_metric("loss", loss.item(), step=epoch)
+                    
+                scheduler.step()
+                # Log loss as a metric after each epoch
+                mlflow.log_metric("epoch_loss", epoch_loss, step=epoch)
+                print(f'Epoch {epoch + 1}/{nepochs} completed. Median loss: {np.median(loss.detach().cpu().numpy())}')
+
+            # Log the pytorch model and register as version 1
+            mlflow.pytorch.log_model(
+                sk_model=self.model,
+                artifact_path="Flow4z_SBP",
+                signature=signature,
+                registered_model_name=f"sbp-{data_dir}-zpcalib:{self.zp_calib}",
+            )
+            
         return self.model
     
     def predict_flux(self, image, return_pdf=False):
-
         
         if self.zp_calib is not None:
             flux, logalpha, logsig, features = self.model(image.to(self.device), self.zp_calib)
@@ -137,26 +173,27 @@ class SBP:
 
         return f.detach().cpu().numpy(), features
 
-    def get_features(self, data_dir, model_path):
+    def get_features(self, data_dir):
 
         nobj = len(os.listdir(data_dir))
 
         for i in range(nobj):
-            stamps = torch.zeros(size=(len(bands), self.nexp, 60, 60))
-            zps = torch.zeros(size=(len(bands), self.nexp))
-            features = torch.zeros(size=(len(bands), 10))
+            stamps = torch.zeros(size=(len(self.bands), self.nexp, 60, 60))
+            zps = torch.zeros(size=(len(self.bands), self.nexp))
+            features = torch.zeros(size=(len(self.bands), 10))
 
-            for ib, band in enumerate(bands):
+            for ib, band in enumerate(self.bands):
                 max_norm = 0
                 for exp in range(self.nexp):
                     stamps[ib, exp], max_stamp, meta = load_image(data_dir, i, band, exp)
-                    zps[ib, exp] = meta[0, 2]
+                    
                     max_norm += max_stamp
                 max_norm = max_norm / self.nexp
                 stamps[ib] = stamps[ib] / max_norm
 
-                if zp_calib != False:
-                    zps = zps * torch.normal(1, zp_calib, size=zps.shape)
+                if self.zp_calib != False:
+                    zps[ib, exp] = meta[0, 2]
+                    zps = zps * torch.normal(1, self.zp_calib, size=zps.shape)
 
                     f, feature = self.predict_flux(stamps[ib].unsqueeze(0).unsqueeze(0), zp_calib=zps[ib].unsqueeze(0))
                 else:
@@ -180,6 +217,7 @@ class SBP:
 
         print('loaders created')        
         for m, stamp, max_norm in loader:
+            print(m.shape)
             stamp = stamp.reshape(len(stamp) * len(self.bands), 3, 60, 60).unsqueeze(1).float().to(self.device)
             max_norm = max_norm.reshape(len(max_norm) * len(self.bands))
             
@@ -192,6 +230,7 @@ class SBP:
 
             # Denormalize flux predictions if necessary
             flux_pred = flux_pred * max_norm.numpy()
+            
             
             # Store the predictions and true values
             all_flux_predictions.append(flux_pred)
