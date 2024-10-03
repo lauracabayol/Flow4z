@@ -50,16 +50,15 @@ class SBP_model_multExp(nn.Module):
         self.ll_mean = nn.Sequential(nn.Linear(10, 5))
         
         
-    def forward(self, img, zp=False):
+    def forward(self, img, zp=None):
         
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         features = torch.Tensor().to(device)
-        
         for e in range(img.shape[2]):
             x = self.encoder1(img[:,:,e,:,:])
             x = x.view(len(x),-1) #convert to 1D array
-            if zp !=False:
+            if zp != None:      
                 x = torch.cat((x, zp[:,e].unsqueeze(1)), 1)
             feature = self.linear_features(x)
             features = torch.cat((features,feature),1)

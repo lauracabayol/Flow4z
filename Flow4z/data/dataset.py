@@ -157,12 +157,12 @@ class DataSet:
         """
         path_data = str(self.data_dir / f'data_{i}/')
         
-        if self.nexp == 3:
-            features = torch.Tensor(np.load(path_data + f'/features_{i}.npy'))
-        elif self.nexp == 1:
-            features = torch.Tensor(np.load(path_data + f'/features_1exp_{i}.npy'))
-        elif self.nexp == 2:
-            features = torch.Tensor(np.load(path_data + f'/features_2exp_{i}.npy'))
+        #if self.nexp == 3:
+        features = torch.Tensor(np.load(path_data + f'/features_{i}.npy'))
+        #elif self.nexp == 1:
+        #    features = torch.Tensor(np.load(path_data + f'/features_1exp_{i}.npy'))
+        #elif self.nexp == 2:
+        #    features = torch.Tensor(np.load(path_data + f'/features_2exp_{i}.npy'))
         
         max_norms = torch.Tensor(np.load(path_data + f'/max_norm_{i}.npy'))
         meta = torch.Tensor(np.load(path_data + f'/metadata_{i}.npy'))

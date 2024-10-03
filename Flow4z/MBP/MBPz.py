@@ -21,7 +21,9 @@ sys.path.append('../utils')
 from SBP_models import SBP_model_multExp
 from MBP_models import NF_model_MBP
 from dataloader import create_dataloaders
-
+from SBP import SBP
+from dataset import DataSet
+from load_image import load_image
 class MBPz:
     def __init__(self, 
                  model_path_sbp, 
@@ -65,7 +67,6 @@ class MBPz:
         model_sbp = SBP_model_multExp(zp_calib=checkpoint['metadata']['model_metadata']['zp_calib'])
         model_sbp.load_state_dict(checkpoint['model_state_dict'])
         self.model_sbp = model_sbp.eval().to(self.device)  # Set the model to evaluation mode
-
         
     
         # Retrieve zp_calib from model metadata
@@ -85,8 +86,10 @@ class MBPz:
             self.normflow = NF_model_MBP(dim_inputSpace=self.input_dim)
         
         if model_path_normflow is not None:
-            self.normflow.load_state_dict(torch.load(model_path_normflow, map_location=self.device))
+            checkpoint = torch.load(model_path_normflow, map_location=self.device)
+            self.normflow.load_state_dict(checkpoint['model_state_dict'])
             print("Loaded pre-trained normalizing flow model.")
+            self.batch_size=checkpoint['metadata']['model_metadata']['training_hyperparams']['batch_size']
         self.normflow = self.normflow.to(self.device)
         
         
@@ -115,6 +118,8 @@ class MBPz:
             mlflow.set_tag("project", "Flow4z:MBP")
             mlflow.set_tag("input directory", f"{data_dir}")
             mlflow.set_tag("Model_SBP", f"{self.model_path_sbp}")
+            mlflow.set_tag("Model_MBP", f"{self.save_path}")
+            mlflow.set_tag("predict_photoz", f"{self.predict_photoz}")
     
             # Log parameters for the run
             mlflow.log_param("learning_rate", training_hyperparams['learning_rate'])
@@ -135,9 +140,10 @@ class MBPz:
             print(f"Starting training for {training_hyperparams['nepochs']} epochs...")
             
             # Training loop
-            for epoch in tqdm(range(training_hyperparams['nepochs']), desc="Training Progress"):
-                epoch_loss = 0.0  # Accumulate the loss for the epoch
-                for meta, data, max_norm in loader_train:
+            for epoch in range(training_hyperparams['nepochs']):
+                epoch_loss = 0.0
+                progress_bar = tqdm(loader_train, desc=f"Epoch {epoch + 1}/{training_hyperparams['nepochs']}", unit="epoch")
+                for meta, data, max_norm in progress_bar:
                     optimizer.zero_grad()
     
                     if self.file_type == 'image':
@@ -147,20 +153,23 @@ class MBPz:
                             f, feature = predict_flux(self.model_sbp, data[:, b, :, :].unsqueeze(1))
                             features[:, b, :] = feature.detach()
                         features = features.reshape(len(features), self.nbands * 10)
+                        
                     elif self.file_type == 'features':
-                        optimizer.zero_grad()
-                        flab = meta[:, :, 1] / max_norm
+                        flab = meta[:, :, 0] / max_norm
                         features = data.reshape(len(data), self.nbands * 10)
+                        
     
                     if self.predict_photoz:
-                        input_nf = torch.cat((flab, meta[:, 0:1, 1]), dim=1)
+                        input_nf = torch.cat((flab, meta[:, 0:1, 0]), dim=1)
                     else:
                         input_nf = flab
+                        
     
                     if self.flow_type == 'affine':
                         z, log_jac_det = self.normflow(input_nf.to(self.device), features.to(self.device))
                         loss = 0.5 * torch.sum(z**2, 1) - log_jac_det
                         loss = loss.mean()
+                        
                     elif self.flow_type == 'gaussianization':
                         input_nf = torch.DoubleTensor(input_nf)
                         log_pdf, _, _ = self.normflow(input_nf.to(self.device), 
@@ -180,43 +189,18 @@ class MBPz:
                 if self.verbose:
                     print(f"Epoch [{epoch+1}/{training_hyperparams['nepochs']}], Loss: {epoch_loss:.4f}")
            
-            self.save_model()
     
             # Optionally log and register the final model
             mlflow.pytorch.log_model(self.normflow, "Flow4z_MBP_Final")
             print("Training completed.")
 
-    def save_model(self):
-        """
-        Saves the model's state dictionary and metadata to the specified save path.
+        return self.normflow
 
-        """
-        print(f"Saving model.")
-        model_state_dict = self.normflow.state_dict()
 
-        # Save metadata
-        metadata = {
-            'nepochs': self.nepochs,
-            'lr': self.lr,
-            'batch_size': self.batch_size,
-            'bands': self.bands,
-            'file_type': self.file_type,
-            'flow_type': self.flow_type,
-            'predict_photoz': self.predict_photoz,
-            'ntransformation': self.ntransformation,
-            'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        torch.save({
-            'model_state_dict': model_state_dict,
-            'metadata': metadata
-        }, self.save_path)
-
-    def predict_dataset(self,
-                        path_data, 
-                        nexp=3,
+    def process_catalog(self,
+                        data_dir, 
                         Nrealizations=100, 
-                        return_features=False, 
-                        return_distributions=True):
+                        return_distributions=False):
         """
         Generates predictions for a given dataset, optionally returning features and distributions.
 
@@ -231,44 +215,100 @@ class MBPz:
         - preds_all (numpy.ndarray): Array containing all predictions if return_distributions is True.
         - photometric_preds_mean, photoz_preds_mean (numpy.ndarray): Mean predictions if only features are returned.
         """
+        self.normflow = self.normflow.eval()
         print(f"Predicting dataset with {Nrealizations} realizations per object...")
-        loader_test = create_dataloaders(path_data=path_data,
+        loader_test = create_dataloaders(path_data=data_dir,
                                          batch_size=1,
-                                         nexp=nexp,
-                                         test_size=0,
+                                         nexp=self.nexp,
+                                         test_size=1000,
                                          bands=self.bands,
                                          file_type=self.file_type)
         
         nobj = len(os.listdir(data_dir))
         preds_all = np.zeros((nobj, Nrealizations, self.input_dim))
+        photometry_true = np.zeros(shape=(nobj,len(self.bands)))
+
+        progress_bar = tqdm(loader_test, 
+                            desc="Prediction Progress")
         
-        for samp, (meta, features, max_norm) in enumerate(tqdm(loader_test, desc="Prediction Progress")):
+        for samp, (meta, features, max_norm) in enumerate(progress_bar):
             Niter = int(Nrealizations / self.batch_size)
             preds = np.zeros(shape=(Niter, self.batch_size, self.input_dim))
             
             features = features.reshape(len(features), self.nbands * 10) 
-            condition = torch.tile(features, (self.batch_size, 1)).to(self.device)            
+            condition = torch.tile(features, (self.batch_size, 1)).to(self.device)    
+
+            photometry_true[samp] = meta[0,:,0] 
 
             # Generate predictions
             for ii in range(Niter):
                 z_test = torch.randn(self.batch_size, self.input_dim).to(self.device)
                 pred, _ = self.normflow(z_test, condition, rev=True)
                 preds[ii] = pred.detach().cpu().numpy()
+
                 
             preds = preds.reshape(Niter * self.batch_size, self.input_dim)
-            preds_all[samp] = preds
+            preds_all[samp] = preds * max_norm.numpy()
+
             
-            photometric_preds = preds[:, :self.nbands]
-            photoz_preds = preds[:, self.nbands:]
-            
-            photometric_preds_mean = np.nanmean(photometric_preds, axis=0)
-            photoz_preds_mean  = np.nanmean(photoz_preds, axis=0)
-                
-        if return_features:
-            return photometric_preds_mean, photoz_preds_mean, features
         if return_distributions:
             return preds_all
-        if return_features and return_distributions:
-            return photometric_preds, photoz_preds, features
-        else:
+        elif self.predict_photoz:                    
+            photometric_preds_mean =  np.nanmean(photometric_preds, axis=1)
+            photoz_preds_mean  = np.nanmean(photoz_preds, axis=1)
             return photometric_preds_mean, photoz_preds_mean
+        else:
+            photometric_preds_mean =  np.nanmean(preds_all, axis=1)
+            return photometric_preds_mean, photometry_true
+
+    def process_catalog_fromImage(self, data_dir,
+                                  Nrealizations=100, 
+                                  return_distributions=False):
+        
+        nobj = len(os.listdir(data_dir))
+        preds_all = np.zeros((nobj, Nrealizations, self.input_dim))
+        photometry_true = np.zeros(shape=(nobj,len(self.bands)))
+        
+        sbp = SBP(model_path=self.model_path_sbp)
+
+        for i in tqdm(range(nobj), desc="Processing objects", unit="object"):
+            stamps = torch.zeros(size=(len(self.bands), self.nexp, 60, 60))
+            max_norms = np.zeros(shape=5)
+            zps = torch.zeros(size=(len(self.bands), self.nexp))
+            features = torch.zeros(size=(len(self.bands), 10))
+
+            for ib, band in enumerate(self.bands):
+                max_norm = 0
+                for exp in range(self.nexp):
+                    stamps[ib, exp], max_stamp, meta = load_image(data_dir, i, band, exp)
+                    
+                    max_norm += max_stamp
+                max_norm = max_norm / self.nexp
+                stamps[ib] = stamps[ib] / max_norm
+                max_norms[ib] =max_norm
+
+                f, feature = sbp.predict_flux(stamps[ib].unsqueeze(0).unsqueeze(0))
+                
+                features[ib, :] = feature.detach()
+
+            features = features.reshape(1, self.nbands * 10) 
+            condition = torch.tile(features, (self.batch_size, 1)).to(self.device) 
+                         
+            Niter = int(Nrealizations / self.batch_size)
+            preds = np.zeros(shape=(Niter, self.batch_size, self.input_dim))
+            # Generate predictions
+            for ii in range(Niter):
+                z_test = torch.randn(self.batch_size, self.input_dim).to(self.device)
+                pred, _ = self.normflow(z_test, condition, rev=True)
+                preds[ii] = pred.detach().cpu().numpy()
+
+
+            preds = preds.reshape(Niter * self.batch_size, self.input_dim)
+            preds_all[i] = preds * max_norms[None,:]
+            #photometry_true[samp] = m[:, :, 0, 1].reshape(len(m) * len(self.bands)).detach().cpu().numpy()   
+            print(max_norms)
+            print(preds_all[i].mean(0))
+
+
+
+        return preds_all.mean(1), photometry_true
