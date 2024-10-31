@@ -15,6 +15,7 @@ def create_dataloaders(path_data,
                        test_size=500,
                        nexp=3,
                        zp_calib=None,
+                       zp_calib_err=0,
                        file_type='features'):
     """
     Create PyTorch DataLoader objects for training and validation from a dataset directory.
@@ -33,10 +34,12 @@ def create_dataloaders(path_data,
                    multiple_exps=True,
                    nexp=nexp,
                    zp_calib=zp_calib,
+                   zp_calib_err=zp_calib_err,
                    file_type=file_type)
 
     # Split the dataset into training and test sets
     if test_size<len(dset):
+        
         dset_train, dset_test = torch.utils.data.random_split(dset, [len(dset) - test_size, test_size])
 
         # Create DataLoader for the validation set

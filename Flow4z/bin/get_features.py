@@ -1,42 +1,38 @@
 #!/usr/bin/env python
-
+import numpy as np
+import pandas as pd
 import argparse
-import torch
-import os
 import sys
-
+import os
+import mlflow
+import mlflow.pytorch
 sys.path.append('../SBP')
-from SBP import get_features
-from SBP_models import SBP_model_multExp
-
-sys.path.append('../data')
-from load_image import load_image
+from SBP import SBP
 
 def main():
+    """Main function to run the process_catalog from the command line."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Run feature extraction using a trained model.")
     parser.add_argument("--data_dir", type=str, required=True, help="Path to the dataset directory.")
     parser.add_argument("--model_path", type=str, required=True, help="Path to the saved neural network model.")
-    parser.add_argument("--nexp", type=int, default=3, help="Number of exposures (default: 3).")
-
     args = parser.parse_args()
+    print(f"Running process_catalog with model: {args.model_path} and data directory: {args.data_dir}")
 
-    # Inform the user that the process is starting
-    print(f"Starting feature extraction with the following settings:")
-    print(f" - Dataset directory: {args.data_dir}")
-    print(f" - Model path: {args.model_path}")
-    print(f" - Number of exposures: {args.nexp}")
+    # Start an MLflow run
+    with mlflow.start_run():
+        # Log input arguments
+        mlflow.log_param("model_path", args.model_path)
+        mlflow.log_param("data_dir", args.data_dir)
 
-    # Run the feature extraction
-    try:
-        get_features(
-            data_dir=args.data_dir,
-            model_path=args.model_path,
-            nexp=args.nexp,
-        )
-        print("Feature extraction completed successfully.")
-    except Exception as e:
-        print(f"An error occurred during feature extraction: {e}")
+        # Initialize SBP object and call process_catalog
+        sbp = SBP(model_path=args.model_path)
+        sbp.get_features(args.data_dir)
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+

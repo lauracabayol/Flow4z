@@ -25,6 +25,7 @@ class DataSet:
                  stamp_shape=(60, 60), 
                  nexp=3, 
                  zp_calib=False, 
+                 zp_calib_err=0,
                  file_type='image'):
         
         self.data_dir = Path(data_dir)
@@ -34,6 +35,7 @@ class DataSet:
         self.file_type = file_type
         self.nexp = nexp
         self.zp_calib = zp_calib
+        self.zp_calib_err = zp_calib_err
         self.size_meta = 3 if zp_calib else 2
 
     def __len__(self):
@@ -157,13 +159,8 @@ class DataSet:
         """
         path_data = str(self.data_dir / f'data_{i}/')
         
-        if self.nexp == 3:
-            features = torch.Tensor(np.load(path_data + f'/features__zp5perc_{i}.npy'))
-        elif self.nexp == 1:
-            features = torch.Tensor(np.load(path_data + f'/features_1exp_{i}.npy'))
-        elif self.nexp == 2:
-            features = torch.Tensor(np.load(path_data + f'/features_2exp_{i}.npy'))
-        
+        features = torch.Tensor(np.load(path_data + f'/features_{i}_{self.zp_calib_err}.npy'))
+
         max_norms = torch.Tensor(np.load(path_data + f'/max_norm_{i}.npy'))
         meta = torch.Tensor(np.load(path_data + f'/metadata_{i}.npy'))
 
