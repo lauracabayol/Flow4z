@@ -21,7 +21,7 @@ def create_zarr_dataset(data_dir: Path, zarr_output: Path) -> None:
 
     # Loop over each subdirectory with a progress bar
     for subdir_idx in tqdm(range(total_subdirs), desc="Processing Subdirectories", unit="subdir"):
-        subdir = os.path.join(data_dir, f'data_{subdir_idx}')
+        subdir = data_dir / f'data_{subdir_idx}'
 
         # Create a Zarr group for each subdirectory to store its .npy files
         group_name = f'data_{subdir_idx}'
@@ -31,7 +31,7 @@ def create_zarr_dataset(data_dir: Path, zarr_output: Path) -> None:
         for band in range(455, 855, 10):
             for exp in [0, 1, 2]:
                 file_name = f'cutout_pau_nb{band}_exp{exp}.npy'
-                file_path = os.path.join(subdir, file_name)
+                file_path = subdir / file_name
 
                 # Load the .npy file
                 data = np.load(file_path)
@@ -57,7 +57,7 @@ def create_zarr_metadata(data_dir: Path, zarr_output: Path) -> None:
 
     # Loop over each subdirectory with a progress bar
     for subdir_idx in tqdm(range(total_subdirs), desc="Processing Subdirectories", unit="subdir"):
-        subdir = os.path.join(data_dir, f'data_{subdir_idx}')
+        subdir = data_dir / f'data_{subdir_idx}'
 
         # Create a Zarr group for each subdirectory to store its metadata
         group_name = f'data_{subdir_idx}'
@@ -68,17 +68,17 @@ def create_zarr_metadata(data_dir: Path, zarr_output: Path) -> None:
             for exp in [0, 1, 2]:
                 # Assuming the metadata filenames follow this format
                 metadata_file_name = f'metadata_pau_nb{band}_exp{exp}.npy'
-                metadata_file_path = os.path.join(subdir, metadata_file_name)
+                metadata_file_path = subdir / metadata_file_name
 
                 # Load the metadata .npy file
                 metadata = np.load(metadata_file_path)
 
-                metadata_shape = (1,3)  # Define shape according to your needs
+                metadata_shape = (1,3) 
                 metadata_dataset_name = f'metadata_nb{band}_exp{exp}'
                 metadata_dataset = subdir_group.create_dataset(metadata_dataset_name, data=metadata, chunks=True, overwrite=True)
 
                 # Store metadata as an array or object
-                metadata_dataset[0] = metadata[0]  # Storing as an object, adjust as needed
+                metadata_dataset[0] = metadata[0]  
 
                 # Alternatively, add metadata as attributes if it's appropriate
                 metadata_dataset.attrs.update({
