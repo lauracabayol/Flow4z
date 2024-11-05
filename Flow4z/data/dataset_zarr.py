@@ -1,0 +1,99 @@
+import numpy as np
+from pathlib import Path
+import torch
+import zarr
+from dataclasses import dataclass
+
+@dataclass
+class DataSet:
+    """
+    Custom dataset loader for handling different types of data including images and features.
+
+    Attributes:
+        data_dir (Path): Directory containing the dataset.
+        bands (list): List of band identifiers.
+        multiple_exps (bool): Flag indicating if multiple exposures are present.
+        stamp_shape (tuple): Shape of the image stamps.
+        nexp (int): Number of exposures.
+        zp_calib (bool): Flag indicating if zero-point calibration is used.
+        file_type (str): Type of file to load ('image' or 'features').
+        size_meta (int): Size of metadata depending on zp_calib.
+    """
+    data_dir: Path
+    metadata_dir: Path
+    bands: list
+    nexp: int = 3
+    stamp_shape: tuple = (60, 60)
+
+    def __post_init__(self):
+        self.zarr_store = zarr.open_group(self.data_dir, mode="r")
+        self.metadata_store = zarr.open_group(self.metadata_dir, mode="r")
+
+    def __len__(self):
+        """
+        Returns the number of data files available in the dataset directory.
+        """
+        return len(list(self.zarr_store.group_keys()))
+
+    def _load_image(self, i, band, exp):
+        """
+        Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
+
+        Args:
+            i (int): Data index.
+            band (str): Band identifier.
+            exp (int): Exposure number.
+
+        Returns:
+            torch.FloatTensor: The loaded image stamp.
+            float: The maximum value of the stamp.
+        """
+        stamp = self.zarr_store[f"data_{i}"][f"nb{band}_exp{exp}"][:]
+        stamp = np.nan_to_num(stamp)
+        max_stamp = np.max(stamp)
+        stamp = torch.FloatTensor(stamp)
+
+        return stamp, max_stamp
+
+    def _load_metadata(self, i, band, exp):
+        """
+        Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
+
+        Args:
+            i (int): Data index.
+            band (str): Band identifier.
+            exp (int): Exposure number.
+
+        Returns:
+            torch.FloatTensor: The loaded image stamp.
+            float: The maximum value of the stamp.
+        """
+        metadata = self.metadata_store[f"data_{i}"][f"metadata_nb{band}_exp{exp}"][:]
+        return metadata[:, 0], metadata[:, 1], metadata[:, 2] #z, f, zp
+
+    def __getitem__(self, i):
+        """
+        Load and normalize images and metadata for multiple exposures.
+
+        Args:
+            i (int): Data index.
+
+        Returns:
+            tuple: Metadata, image stamps, and maximum norms.
+        """
+        stamps = torch.zeros(size=(len(self.bands), self.nexp, *self.stamp_shape))
+        meta = torch.zeros(size=(len(self.bands), self.nexp, self.size_meta))
+        max_norms = torch.zeros(size=(len(self.bands), 1))
+        
+        for ib, b in enumerate(self.bands):
+            max_norm = 0
+            for exp in range(self.nexp):
+                z, f, zp = self._load_metadata(i, b, exp)
+                meta[ib, exp] = torch.DoubleTensor(np.c_[z, f, zp])
+                stamps[ib, exp], max_stamp = self._load_image(i, b, exp)
+                max_norm += max_stamp            
+            max_norms[ib] = max_norm / self.nexp
+            stamps[ib] = stamps[ib] / max_norms[ib]
+        
+        return meta, stamps, max_norms
+
