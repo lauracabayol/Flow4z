@@ -24,6 +24,7 @@ class DataSet:
     bands: list
     nexp: int = 3
     stamp_shape: tuple = (60, 60)
+    size_meta: int = 3
 
     def __post_init__(self):
         self.zarr_store = zarr.open_group(self.data_dir, mode="r")
@@ -48,7 +49,7 @@ class DataSet:
             torch.FloatTensor: The loaded image stamp.
             float: The maximum value of the stamp.
         """
-        stamp = self.zarr_store[f"data_{i}"][f"nb{band}_exp{exp}"][:]
+        stamp = self.zarr_store[f"data_{i}"][f"{band}_exp{exp}"][:]
         stamp = np.nan_to_num(stamp)
         max_stamp = np.max(stamp)
         stamp = torch.FloatTensor(stamp)
@@ -68,7 +69,7 @@ class DataSet:
             torch.FloatTensor: The loaded image stamp.
             float: The maximum value of the stamp.
         """
-        metadata = self.metadata_store[f"data_{i}"][f"metadata_nb{band}_exp{exp}"][:]
+        metadata = self.metadata_store[f"data_{i}"][f"metadata_{band}_exp{exp}"][:]
         return metadata[:, 0], metadata[:, 1], metadata[:, 2] #z, f, zp
 
     def __getitem__(self, i):
