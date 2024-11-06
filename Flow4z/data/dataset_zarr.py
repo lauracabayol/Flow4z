@@ -36,7 +36,9 @@ class DataSet:
         """
         return len(list(self.zarr_store.group_keys()))
 
-    def _load_image(self, i, band, exp):
+    def _load_image(self, i: int, 
+                    band: str, 
+                    exp: int) -> tuple[torch.FloatTensor, float]:
         """
         Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
 
@@ -56,7 +58,7 @@ class DataSet:
 
         return stamp, max_stamp
 
-    def _load_metadata(self, i, band, exp):
+    def _load_metadata(self, i: int, band: str, exp: int) -> tuple[torch.FloatTensor, float, float]:
         """
         Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
 
@@ -72,7 +74,7 @@ class DataSet:
         metadata = self.metadata_store[f"data_{i}"][f"metadata_{band}_exp{exp}"][:]
         return metadata[:, 0], metadata[:, 1], metadata[:, 2] #z, f, zp
 
-    def __getitem__(self, i):
+    def __getitem__(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """
         Load and normalize images and metadata for multiple exposures.
 

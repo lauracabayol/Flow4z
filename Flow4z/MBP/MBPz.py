@@ -1,104 +1,77 @@
 import torch
-from torch import nn, optim
 import numpy as np
-import datetime
-import time
 import os
-import sys
-from tqdm import tqdm  # Progress bar
+from tqdm import tqdm  
+from dataclasses import dataclass
+from typing import List
+import logging
+from pathlib import Path
 import mlflow
 import mlflow.pytorch
-from mlflow.exceptions import MlflowException
-from loguru import logger
 from mlflow.tracking import MlflowClient
-
-mlflow.set_tracking_uri("http://127.0.0.1:5000")
-
 client = MlflowClient()
 
-
-# Assuming necessary imports for SBP_model_multExp, NF_model_MBP, etc.
-sys.path.append("../SBP")
-sys.path.append("../MBP")
-sys.path.append("../bookkeeper")
-sys.path.append("../data")
-sys.path.append("../utils")
-
-from SBP_models import SBP_model_multExp
-from MBP_models import NF_model_MBP
-from dataloader import create_dataloaders
-from SBP import SBP
-from dataset import DataSet
-from load_image import load_image
+from Flow4z.utils.logging_config import setup_logging
+logger = logging.getLogger(__name__)
+setup_logging()
 
 
+from Flow4z.MBP.MBP_models import NF_model_MBP
+from Flow4z.data.dataloader import create_dataloaders
+from Flow4z.SBP import SBP
+
+@dataclass
 class MBPz:
-    def __init__(
-        self,
-        sbp_version=None,
-        mbp_version=None,
-        nexp=3,
-        save_path=None,
-        file_type="features",
-        predict_photoz=True,
-        zp_calib_err=0,
-        ntransformation=8,
-    ):
-        """
-        Initializes the MBPz model, setting up paths, models, and hyperparameters.
+    sbp_version: str 
+    restore: bool = False
+    mbp_version: str = None
+    bands: List[str] = ["CFHT_U","CFHT_G","CFHT_R","CFHT_I","CFHT_Z"],
+    nexp: int = 3
+    save_path: str = None
+    file_type: str = "features"
+    predict_photoz: bool = True
+    zp_calib_err: int = 0
+    ntransformation: int = 8
+    mlflow_tracking_uri: str = "http://127.0.0.1:5000"
 
-        Arguments:
-        - model_path_sbp (str): Path to the pre-trained SBP model checkpoint.
-        - nexp (int): Number of exposure samples to generate. Default is 3.
-        - save_path (str or None): Directory to save the trained model checkpoints. Default is None.
-        - file_type (str): Type of input files (e.g., 'image', 'csv'). Default is 'image'.
-        - predict_photoz (bool): Whether to predict photometric redshifts. Default is True.
-        - ntransformation (int): Number of transformations in the normalizing flow. Default is 8.
+
+    def __post_init__(self):
+        """Initialize the MBPz model with optional loading of pretrained models.
+
+        Sets up device, loads SBP model, initializes normalizing flow model, and configures
+        parameters like number of exposures, transformations, etc.
         """
-        print("Initializing MBPz model...")
+        logger.info("Initializing MBPz model...")
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.file_type = file_type
-        self.nexp = nexp
-        self.ntransformation = ntransformation
-        self.predict_photoz = predict_photoz
-        self.save_path = save_path
-        self.sbp_version = sbp_version
-
-        
-        client = MlflowClient()
+        if self.mlflow_tracking_uri:
+            mlflow.set_tracking_uri(self.mlflow_tracking_uri)
 
         # Initialize SBP model
         logger.info("Loading SBP model...")
         model_name = "SBP"
-        model_uri = f"models:/{model_name}/{sbp_version}"
-        model = mlflow.pytorch.load_model(model_uri).to(self.device)
+        model_uri = f"models:/{model_name}/{self.sbp_version}"
+        self.model_sbp = mlflow.pytorch.load_model(model_uri).to(self.device)
 
-        # Retrieve zp_calib from model metadata
-        zp_calib = True  # checkpoint['metadata']['model_metadata']['zp_calib']
-        bands = [
-            "CFHT_U",
-            "CFHT_G",
-            "CFHT_R",
-            "CFHT_I",
-            "CFHT_Z",
-        ]  # checkpoint['metadata']['model_metadata']['bands']
+        #zp_calib = True  
+        self.nbands = len(self.bands)
+        self.zp_calib_err=self.zp_calib_err
 
-        self.bands = bands
-        self.nbands = len(bands)
-        self.zp_calib_err=zp_calib_err
-
-        
         # Initialize normalizing flow model
         logger.info("Initializing normalizing flow model...")
 
-        if mbp_version is not None:
+        if self.restore:
+            if self.mbp_version is None:
+                msg = "mbp_version must be provided when restore=True"
+                logger.error(msg)
+                raise ValueError(msg)
+        
             logger.info("Loading MBP model...")
             model_name = "MBP"
-            model_uri = f"models:/{model_name}/{mbp_version}"
+            model_uri = f"models:/{model_name}/{self.mbp_version}"
             self.normflow  = mlflow.pytorch.load_model(model_uri).to(self.device)
 
             #access model parameters
-            model_version_details = client.get_model_version(model_name, mbp_version)
+            model_version_details = client.get_model_version(model_name, self.mbp_version)
             run_id = model_version_details.run_id
             run = client.get_run(run_id)
             params = run.data.params  
@@ -107,15 +80,15 @@ class MBPz:
             self.batch_size=int(params['batch_size'])
             self.zp_calib_err=int(params['zp_calib_error'])
             self.input_dim = self.nbands + 1 if self.predict_photoz else self.nbands
-
-            
+    
         else:
             self.input_dim = self.nbands + 1 if self.predict_photoz else self.nbands
             self.normflow = NF_model_MBP(dim_inputSpace=self.input_dim)
                     
         self.normflow = self.normflow.to(self.device)
 
-    def train(self, data_dir, training_hyperparams):
+    def train(self, data_dir: Path | str, 
+              training_hyperparams: dict):
         """
         Trains the normalizing flow model using the provided data.
     
@@ -124,7 +97,7 @@ class MBPz:
         """
         logger.info("Creating data loaders...")
     
-        loader_train, loader_val = create_dataloaders(
+        loader_train, _ = create_dataloaders(
             data_dir,
             self.bands,
             nexp=self.nexp,
@@ -133,43 +106,34 @@ class MBPz:
             file_type=self.file_type,
         )
     
-        optimizer = optim.Adam(
+        optimizer = torch.optim.Adam(
             self.normflow.parameters(), lr=training_hyperparams["learning_rate"]
         )
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=150, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=150, gamma=0.1)
     
         with mlflow.start_run() as run:
             logger.info(
                 f"Starting training for {training_hyperparams['nepochs']} epochs..."
             )
-            for epoch in range(training_hyperparams["nepochs"]):
+            progress_bar = tqdm(range(training_hyperparams["nepochs"]), desc="Training epochs", unit="epoch")
+            for epoch in progress_bar:
                 epoch_loss = 0.0
-                progress_bar = tqdm(
-                    loader_train,
-                    desc=f"Epoch {epoch + 1}/{training_hyperparams['nepochs']}",
-                    unit="batch",
-                )
-                for meta, data, max_norm in progress_bar:
+                for meta, data, max_norm in loader_train:
                     optimizer.zero_grad()
     
                     if self.file_type == "image":
-                        features = torch.zeros(size=(len(data), self.nbands, 10))
+                        raise NotImplementedError("Predicting features from images is not supported")
+                        """features = torch.zeros(size=(len(data), self.nbands, 10))
                         flab = meta[:, :, 0, 1] / max_norm[:, :, 0]
                         for b in range(self.nbands):
-                            f, feature = predict_flux(
-                                self.model_sbp, data[:, b, :, :].unsqueeze(1)
-                            )
-                            features[:, b, :] = feature.detach()
-                        features = features.reshape(len(features), self.nbands * 10)
-    
-                    elif self.file_type == "features":
+                            _, feature = self.model_sbp.predict_flux(self.model_sbp, data[:, b].unsqueeze(1))
+                            features[:, b] = feature.detach()
+                        features = features.view(len(features), -1)"""
+                    else: 
                         flab = meta[:, :, 0] / max_norm
-                        features = data.reshape(len(data), self.nbands * 10)
-    
-                    if self.predict_photoz:
-                        input_nf = torch.cat((flab, meta[:, 0:1, 1]), dim=1)
-                    else:
-                        input_nf = flab
+                        features = data.view(len(data), -1)
+
+                    input_nf = torch.cat((flab, meta[:, 0:1, 1]), dim=1) if self.predict_photoz else flab
     
                     z, log_jac_det = self.normflow(
                         input_nf.to(self.device), features.to(self.device)
@@ -180,8 +144,8 @@ class MBPz:
                     loss.backward()
                     optimizer.step()
     
-                    epoch_loss += loss.item()  # Accumulate loss for this epoch
-                    progress_bar.set_postfix({"loss": loss.item()})  # Update progress bar with current loss
+                    epoch_loss += loss.item()  
+                    progress_bar.set_postfix({"loss": loss.item()})  
     
                 scheduler.step()
     
@@ -211,7 +175,9 @@ class MBPz:
         return self.normflow
 
 
-    def process_catalog(self, data_dir, Nrealizations=100, return_distributions=False):
+    def process_catalog(self, data_dir: Path | str, 
+                        Nrealizations: int = 100, 
+                        return_distributions: bool = False):
         """
         Generates predictions for a given dataset, optionally returning features and distributions.
 
@@ -228,7 +194,7 @@ class MBPz:
         """
         self.normflow = self.normflow.eval()
         batch_size=1
-        print(f"Predicting dataset with {Nrealizations} realizations per object...")
+        logger.info(f"Predicting dataset with {Nrealizations} realizations per object...")
         loader_test = create_dataloaders(
             path_data=data_dir,
             nexp=self.nexp,
@@ -255,8 +221,6 @@ class MBPz:
             photometry_true[samp] = meta[:, :, 0]
             photoz_true[samp] =  meta[:,0,1]
 
-
-
             z_test = torch.randn(Nrealizations, self.input_dim).to(self.device)
             preds, _ = self.normflow(z_test, condition, rev=True)
 
@@ -270,17 +234,18 @@ class MBPz:
 
         if return_distributions:
             return preds_photometry_all, preds_all_photoz
-        elif self.predict_photoz==True:
-            photometric_preds_mean = np.nanmean(preds_photometry_all, axis=1)
-            photometric_preds_err = np.nanstd(preds_photometry_all, axis=1)
 
+        # Calculate mean and std for photometric predictions
+        photometric_preds_mean = np.nanmean(preds_photometry_all, axis=1)
+        photometric_preds_err = np.nanstd(preds_photometry_all, axis=1)
+
+        if self.predict_photoz:
+            # Calculate mean and std for photoz predictions
             photoz_preds_mean = np.nanmean(preds_all_photoz, axis=1)
             photoz_preds_err = np.nanstd(preds_all_photoz, axis=1)
+            return (photometric_preds_mean, photometric_preds_err, photometry_true,
+                   photoz_preds_mean, photoz_preds_err, photoz_true)
 
-            return photometric_preds_mean, photometric_preds_err, photometry_true, photoz_preds_mean, photoz_preds_err, photoz_true
-        else:
-            photometric_preds_mean = np.nanmean(preds_photometry_all, axis=1)
-            photometric_preds_err = np.nanstd(preds_photometry_all, axis=1)
+        return photometric_preds_mean, photometric_preds_err, photometry_true
 
-            return photometric_preds_mean, photometric_preds_err, photometry_true
 

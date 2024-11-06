@@ -1,8 +1,11 @@
 import numpy as np
-import os
+from pathlib import Path
 import torch
 
-def load_image(data_dir, i, band, exp=0):
+def load_image(data_dir: Path | str, 
+               i: int,
+               band: str, 
+               exp: int = 0) -> tuple[torch.FloatTensor, float, np.ndarray]:
     """
     Load a specific image and its metadata from the dataset.
 
@@ -17,8 +20,8 @@ def load_image(data_dir, i, band, exp=0):
         max_stamp (float): The maximum pixel value in the stamp.
         meta (np.ndarray): Metadata associated with the image.
     """
-    path = f'{data_dir}/data_{i}/cutout_{band}_exp{exp}.npy'
-    path_meta = f'{data_dir}/data_{i}/metadata_{band}_exp{exp}.npy'
+    path = Path(data_dir) / f'data_{i}' / f'cutout_{band}_exp{exp}.npy'
+    path_meta = Path(data_dir) / f'data_{i}' / f'metadata_{band}_exp{exp}.npy'
 
     # Load image and metadata
     stamp = np.load(path).reshape(60, 60)

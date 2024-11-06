@@ -1,46 +1,43 @@
-from loguru import logger
-import numpy as np
-import sys
-from scipy.stats import norm
 import os
 import torch
-from torch import nn, optim
-from torch.utils.data import DataLoader
+import numpy as np
+from scipy.stats import norm
+
 from tqdm import tqdm
+import logging
+from dataclasses import dataclass
+from typing import Optional, List, Tuple
+from pathlib import Path
+
 
 import mlflow
 import mlflow.pytorch
-from mlflow.exceptions import MlflowException
-from loguru import logger
-
-mlflow.set_tracking_uri("http://127.0.0.1:5000")
-
-# Custom modules
-sys.path.append("../data")
-from dataset_zarr import DataSet
-from load_image import load_image
-
-sys.path.append("/.")
-from SBP_models import SBP_model_multExp
-
-sys.path.append("../utils")
-from dataloader import create_dataloaders
-
 from mlflow.tracking import MlflowClient
 client = MlflowClient()
 
+# Custom modules
+from Flow4z.SBP.SBP_models import SBP_model_multExp
+from Flow4z.data.dataloader import create_dataloaders
+from Flow4z.utils.logging_config import setup_logging
 
+logger = logging.getLogger(__name__)
+setup_logging()
 
+@dataclass
 class SBP:
-    def __init__(
-        self, 
-        sbp_version=None, 
-        zp_calib=True, 
-        zp_calib_err=0, 
-        nexp=3, 
-        bands=None
-    ):
+    restore: bool = False
+    sbp_version: Optional[str] = None
+    zp_calib: bool = True
+    zp_calib_err: float = 0
+    nexp: int = 3
+    bands: Optional[List[str]] = None
+    mlflow_tracking_uri: str = "http://127.0.0.1:5000"
+
+    def __post_init__(self):
         """Initialize the SBP model with the option to load a pretrained model."""
+
+        if self.mlflow_tracking_uri:
+            mlflow.set_tracking_uri(self.mlflow_tracking_uri)
 
         # Set the device for training (use GPU if available)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -48,119 +45,160 @@ class SBP:
 
         # Initialize the model architecture with a calibration parameter
         logger.info("Initializing the SBP model...")
-        self.model = SBP_model_multExp(zp_calib=zp_calib).to(self.device)
+        self.model = SBP_model_multExp(zp_calib=self.zp_calib).to(self.device)
 
-        # If a model path is provided, load the pre-trained model
-        if sbp_version is not None:
-            logger.info(f"Loading MLFlow version: {sbp_version}")
+        if self.restore:
+            if self.sbp_version is None:
+                msg = "sbp_version must be provided when restore=True"
+                logger.error(msg)
+                raise ValueError(msg)
+            logger.info(f"Loading MLFlow version: {self.sbp_version}")
             model_name = "SBP"
-            model_uri = f"models:/{model_name}/{sbp_version}"
-            model_version_details = client.get_model_version("SBP", sbp_version)
+            model_uri = f"models:/{model_name}/{self.sbp_version}"
+            model_version_details = client.get_model_version("SBP", self.sbp_version)
 
             run_id = model_version_details.run_id
             run = client.get_run(run_id)
             params = run.data.params   
             
             self.model = mlflow.pytorch.load_model(model_uri)
-            self.bands=bands#['CFHT_U','CFHT_G','CFHT_R','CFHT_I','CFHT_Z']
-            self.zp_calib = True
             self.nexp = params['nexp'],
             self.zp_calib_err=eval(params['zp_calib_err']),
             
-        else:
-            self.bands = bands
-            self.zp_calib = zp_calib
-            self.nexp = nexp
-            self.zp_calib_err = zp_calib_err
 
-    def train(self, data_dir, training_hyperparams, metadata_dir=None):
+    def _process_batch(self, meta: torch.Tensor, 
+                       stamp: torch.Tensor, 
+                       max_norm: torch.Tensor, 
+                       nbands: int) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+        """Process a single batch of data."""
+        meta = meta.squeeze(1)
+        z, lab = meta[:, :, :, 0], meta[:, :, :, 1]
+        lab = lab / max_norm
+        
+        # Reshape stamp and lab
+        stamp = (
+            stamp.reshape(len(stamp) * nbands, stamp.shape[2], 60, 60)
+            .unsqueeze(1)
+            .float()
+        )
+        print(stamp.shape)
+        lab = lab[:, :, 0].reshape(len(lab) * nbands).unsqueeze(1)
+        
+        # Handle zero-point calibration
+        zp = None
+        if self.zp_calib:
+            zp = meta[:, :, :, 2]
+            zp = zp * torch.normal(1, self.zp_calib_err / 100, size=zp.shape)
+            zp = zp.reshape(len(zp) * nbands, self.nexp)
+        
+        return stamp, lab, zp
+
+    def _compute_loss(self, stamp: torch.Tensor, 
+                       lab: torch.Tensor, 
+                       zp: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Compute model loss for given inputs."""
+        if zp is not None:
+            flux, logalpha, logsig, _ = self.model(
+                stamp.to(self.device), zp.to(self.device)
+            )
+        else:
+            flux, logalpha, logsig, _ = self.model(stamp.to(self.device))
+
+        logsig = torch.clamp(logsig, -6, 6)
+        sig = torch.exp(logsig)
+
+        log_prob = (
+            logalpha
+            - 0.5 * (flux - lab.to(self.device)).pow(2) / sig.pow(2)
+            - logsig
+        )
+        log_prob = torch.logsumexp(log_prob, 1)
+        return -log_prob.mean()
+
+    def _log_training_metrics(self, epoch: int, 
+                              nepochs: int, 
+                              epoch_loss: torch.Tensor, 
+                              loss: torch.Tensor) -> None:
+        """Log training metrics to MLflow."""
+        mlflow.log_metric("epoch_loss", epoch_loss, step=epoch)
+        logger.info(
+            f"Epoch {epoch + 1}/{nepochs} completed. "
+            f"Median loss: {np.median(loss.detach().cpu().numpy())}"
+        )
+
+    def _log_final_metrics(self, data_dir: Path | str, 
+                            training_hyperparams: dict) -> None:
+        """Log final model metrics and parameters."""
+        mlflow.pytorch.log_model(
+            self.model, artifact_path="model", registered_model_name="SBP"
+        )
+
+        # Log tags
+        tags = {
+            "project": "Flow4z:SBP",
+            "input directory": str(data_dir),
+            "zp_calib": str(self.zp_calib),
+            "zp_calib_err": str(self.zp_calib_err)
+        }
+        for key, value in tags.items():
+            mlflow.set_tag(key, value)
+
+        # Log parameters
+        params = {
+            "learning_rate": training_hyperparams["learning_rate"],
+            "batch_size": training_hyperparams["batch_size"],
+            "nepochs": training_hyperparams["nepochs"],
+            "nexp": self.nexp,
+            "zp_calib_err": str(self.zp_calib_err)
+        }
+        for key, value in params.items():
+            mlflow.log_param(key, value)
+
+    def train(self, data_dir: Path | str, 
+              training_hyperparams: dict, 
+              metadata_dir: Optional[Path | str] = None) -> None:
+        """Main training loop."""
         self.model = self.model.train()
         mlflow.autolog()
-
-        nepochs = training_hyperparams["nepochs"]
-        batch_size = training_hyperparams["batch_size"]
-        lr = training_hyperparams["learning_rate"]
-
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        
+        optimizer = torch.optim.Adam(
+            self.model.parameters(), 
+            lr=training_hyperparams["learning_rate"]
+        )
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=150, gamma=0.1)
         nbands = len(self.bands)
 
-        """loader_train, loader_val = create_dataloaders(
+        loader_train, loader_val = create_dataloaders(
             path_data=data_dir,
             bands=self.bands,
-            batch_size=batch_size,
+            batch_size=training_hyperparams["batch_size"],
             zp_calib=self.zp_calib,
             nexp=self.nexp,
             test_size=2,
             file_type="image",
-        )"""
-
-        loader_train, loader_val = create_dataloaders(
-            path_data=data_dir,
-            path_metadata=metadata_dir,
-            bands=self.bands,
-            nexp=self.nexp
         )
+
         with mlflow.start_run():
-            for epoch in range(nepochs):
-                progress_bar = tqdm(
-                    loader_train, desc=f"Epoch {epoch + 1}/{nepochs}", unit="epoch"
-                )
+            progress_bar = tqdm(range(training_hyperparams["nepochs"]), desc="Training epochs", unit="epoch")
+            for epoch in progress_bar:
                 epoch_loss = 0
-
-                for meta, stamp, max_norm in progress_bar:
+                for meta, stamp, max_norm in loader_train:
                     optimizer.zero_grad()
-
-                    meta = meta.squeeze(1)
-
-                    z, lab = meta[:, :, :, 0], meta[:, :, :, 1]
-                    lab = lab / max_norm
-                    stamp = (
-                        stamp.reshape(len(stamp) * nbands, stamp.shape[2], 60, 60)
-                        .unsqueeze(1)
-                        .float()
-                    )
-                    lab = lab[:, :, 0].reshape(len(lab) * nbands).unsqueeze(1)
-
-                    if self.zp_calib:
-                        zp = meta[:, :, :, 2]
-                        zp = zp * torch.normal(
-                            1, self.zp_calib_err / 100, size=zp.shape
-                        )
-                        zp = zp.reshape(len(zp) * nbands, self.nexp)
-
-                        flux, logalpha, logsig, _ = self.model(
-                            stamp.to(self.device), zp.to(self.device)
-                        )
-                    else:
-                        flux, logalpha, logsig, _ = self.model(stamp.to(self.device))
-
-                    logsig = torch.clamp(logsig, -6, 6)
-                    sig = torch.exp(logsig)
-
-                    log_prob = (
-                        logalpha
-                        - 0.5 * (flux - lab.to(self.device)).pow(2) / sig.pow(2)
-                        - logsig
-                    )
-                    log_prob = torch.logsumexp(log_prob, 1)
-                    loss = -log_prob.mean()
-
+                    
+                    # Process batch and compute loss
+                    stamp, lab, zp = self._process_batch(meta, stamp, max_norm, nbands)
+                    loss = self._compute_loss(stamp, lab, zp)
+                    
+                    # Update model
                     epoch_loss += loss
-
                     loss.backward()
                     optimizer.step()
 
                     progress_bar.set_postfix(loss=loss.item())
-
                     mlflow.log_metric("loss", loss.item(), step=epoch)
 
                 scheduler.step()
-                # Log loss as a metric after each epoch
-                mlflow.log_metric("epoch_loss", epoch_loss, step=epoch)
-                logger.info(
-                    f"Epoch {epoch + 1}/{nepochs} completed. Median loss: {np.median(loss.detach().cpu().numpy())}"
-                )
+                self._log_training_metrics(epoch, training_hyperparams["nepochs"], epoch_loss, loss)
 
             # Log and register the model with MLflow
             mlflow.pytorch.log_model(
@@ -172,15 +210,18 @@ class SBP:
             mlflow.set_tag("zp_calib", f"{self.zp_calib}")
             mlflow.set_tag("zp_calib_err", f"{self.zp_calib_err}")
 
-            mlflow.log_param("learning_rate", lr)
-            mlflow.log_param("batch_size", batch_size)
-            mlflow.log_param("nepochs", nepochs)
+            mlflow.log_param("learning_rate", training_hyperparams["learning_rate"])
+            mlflow.log_param("batch_size", training_hyperparams["batch_size"])
+            mlflow.log_param("nepochs", training_hyperparams["nepochs"])
             mlflow.log_param("nexp", self.nexp)
             mlflow.log_param("zp_calib_err", f"{self.zp_calib_err}")
 
         return self.model
 
-    def predict_flux(self, image, zp, return_pdf=False):
+    def predict_flux(self, image: torch.Tensor, 
+                      zp: Optional[torch.Tensor] = None, 
+                      return_pdf: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Predict flux for a given image."""
         self.model = self.model.eval()
         if self.zp_calib:
             flux, logalpha, logsig, features = self.model(image.to(self.device), zp)
@@ -211,14 +252,14 @@ class SBP:
         return f.detach().cpu().numpy(), ferr.detach().cpu().numpy(), features
 
 
-    def process_catalog(self, data_dir, return_features=False):
+    def process_catalog(self, data_dir: Path | str, 
+                        return_features: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Process a catalog of images and return flux predictions."""
         all_flux_predictions = []
         all_true_fluxes = []
         all_fluxerr_predictions = []
-        zp = None
 
         nobj = len(os.listdir(data_dir))
-
         loader = create_dataloaders(
             data_dir,
             bands=self.bands,
@@ -246,12 +287,12 @@ class SBP:
 
             # Apply zero-point calibration if required
             if self.zp_calib:
-
                 zp = m[:, :, :, 2]
                 zp = zp * torch.normal(1, self.zp_calib_err[0] / 100, size=zp.shape)
                 zp = zp.reshape(len(zp) * len(self.bands), 3).to(self.device)
+            else:         
+                zp = None
 
-            # Predict flux for the current batch
             flux_pred, fluxerr_pred, features = self.predict_flux(stamp, zp)
 
             if return_features:

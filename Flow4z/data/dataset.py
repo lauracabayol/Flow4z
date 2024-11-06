@@ -2,8 +2,19 @@ import numpy as np
 from pathlib import Path
 from glob import glob
 import torch
+from typing import List
+from dataclasses import dataclass
 
+@dataclass
 class DataSet:
+    data_dir: Path
+    bands: List[str]
+    multiple_exps: bool = True
+    stamp_shape: tuple = (60, 60)
+    nexp: int = 3
+    zp_calib: bool = False
+    zp_calib_err: float = 0
+    file_type: str = 'image'
     """
     Custom dataset loader for handling different types of data including images and features.
 
@@ -15,28 +26,10 @@ class DataSet:
         nexp (int): Number of exposures.
         zp_calib (bool): Flag indicating if zero-point calibration is used.
         file_type (str): Type of file to load ('image' or 'features').
-        size_meta (int): Size of metadata depending on zp_calib.
     """
 
-    def __init__(self, 
-                 data_dir, 
-                 bands, 
-                 multiple_exps=True, 
-                 stamp_shape=(60, 60), 
-                 nexp=3, 
-                 zp_calib=False, 
-                 zp_calib_err=0,
-                 file_type='image'):
-        
-        self.data_dir = Path(data_dir)
-        self.stamp_shape = stamp_shape
-        self.multiple_exps = multiple_exps
-        self.bands = bands
-        self.file_type = file_type
-        self.nexp = nexp
-        self.zp_calib = zp_calib
-        self.zp_calib_err = zp_calib_err
-        self.size_meta = 3 if zp_calib else 2
+    def __post_init__(self):
+        self.size_meta = 3 if self.zp_calib else 2
 
     def __len__(self):
         """
@@ -44,7 +37,9 @@ class DataSet:
         """
         return len(glob(str(self.data_dir / 'data_*')))
 
-    def _load_image(self, i, band, exp=0):
+    def _load_image(self, i: int, 
+                    band: str, 
+                    exp: int = 0) -> tuple[torch.FloatTensor, float]:
         """
         Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
 
@@ -57,7 +52,7 @@ class DataSet:
             torch.FloatTensor: The loaded image stamp.
             float: The maximum value of the stamp.
         """
-        path = str(self.data_dir / f'data_{i}' / f'cutout_{band}_exp{exp}.npy')
+        path = self.data_dir / f'data_{i}' / f'cutout_{band}_exp{exp}.npy'
         stamp = np.load(path).reshape(self.stamp_shape)
         stamp = np.nan_to_num(stamp)
         max_stamp = np.max(stamp)
@@ -65,7 +60,7 @@ class DataSet:
 
         return stamp, max_stamp
 
-    def __getitem__(self, i):
+    def __getitem__(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """
         Get the data and metadata for a specific index.
 
@@ -84,7 +79,7 @@ class DataSet:
         elif self.file_type == 'features':
             return self._get_features(i)
 
-    def _get_multiple_exposures(self, i):
+    def _get_multiple_exposures(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """
         Load and normalize images and metadata for multiple exposures.
 
@@ -98,11 +93,11 @@ class DataSet:
         meta = torch.zeros(size=(len(self.bands), self.nexp, self.size_meta))
         max_norms = torch.zeros(size=(len(self.bands), 1))
         
-        path_data = str(self.data_dir / f'data_{i}/')
+        path_data = self.data_dir / f'data_{i}/'
         for ib, b in enumerate(self.bands):
             max_norm = 0
             for exp in range(self.nexp):
-                m = np.load(path_data + f'/metadata_{b}_exp{exp}.npy')
+                m = np.load(path_data / f'/metadata_{b}_exp{exp}.npy')
                 z, f = m[:, 0], m[:, 1]
                 stamps[ib, exp], max_stamp = self._load_image(i, b, exp)
                 max_norm += max_stamp
@@ -118,7 +113,7 @@ class DataSet:
         
         return meta, stamps, max_norms
 
-    def _get_single_exposure(self, i):
+    def _get_single_exposure(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor]:
         """
         Load and normalize images and metadata for a single exposure.
 
@@ -131,9 +126,9 @@ class DataSet:
         stamps = torch.zeros(size=(len(self.bands), *self.stamp_shape))
         meta = torch.zeros(size=(len(self.bands), self.size_meta))
 
-        path_data = str(self.data_dir / f'data_{i}/')
+        path_data = self.data_dir / f'data_{i}/'
         for ib, b in enumerate(self.bands):
-            m = np.load(path_data + f'/metadata_{b}_exp0.npy')
+            m = np.load(path_data / f'/metadata_{b}_exp0.npy')
             z, f = m[:, 0], m[:, 1]
             stamps[ib], max_stamp = self._load_image(i, b)
             stamps[ib] = stamps[ib] / max_stamp
@@ -147,7 +142,7 @@ class DataSet:
         
         return meta, stamps
 
-    def _get_features(self, i):
+    def _get_features(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor]:
         """
         Load features, metadata, and maximum norms.
 
@@ -157,8 +152,7 @@ class DataSet:
         Returns:
             tuple: Metadata, features, and maximum norms.
         """
-        path_data = str(self.data_dir / f'data_{i}/')
-        
+        path_data = self.data_dir / f'data_{i}/'
         features = torch.Tensor(np.load(path_data + f'/features_{i}_{self.zp_calib_err}.npy'))
 
         max_norms = torch.Tensor(np.load(path_data + f'/max_norm_{i}.npy'))
