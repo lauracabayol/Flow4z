@@ -1,6 +1,6 @@
 import sys
 sys.path.append('../data')
-from dataset import DataSet
+from dataset_zarr import DataSet
 import numpy as np
 import pandas as pd
 
@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 
 def create_dataloaders(path_data, 
                        bands, 
+                       path_metadata=None,
                        batch_size=100, 
                        test_size=500,
                        nexp=3,
@@ -29,14 +30,20 @@ def create_dataloaders(path_data,
     """
 
     # Create a DataSet instance based on the provided dataset directory
-    dset = DataSet(data_dir=path_data,
+    """dset = DataSet(data_dir=path_data,
                    bands=bands,
                    multiple_exps=True,
                    nexp=nexp,
                    zp_calib=zp_calib,
                    zp_calib_err=zp_calib_err,
-                   file_type=file_type)
+                   file_type=file_type)"""
+    
+    dset = DataSet(data_dir=path_data,
+                   metadata_dir=path_metadata,
+                   bands=bands,
+                   nexp=nexp)
 
+    
     # Split the dataset into training and test sets
     if test_size<len(dset):
         

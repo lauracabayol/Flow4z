@@ -17,7 +17,7 @@ mlflow.set_tracking_uri("http://127.0.0.1:5000")
 
 # Custom modules
 sys.path.append("../data")
-from dataset import DataSet
+from dataset_zarr import DataSet
 from load_image import load_image
 
 sys.path.append("/.")
@@ -73,7 +73,7 @@ class SBP:
             self.nexp = nexp
             self.zp_calib_err = zp_calib_err
 
-    def train(self, data_dir, training_hyperparams):
+    def train(self, data_dir, training_hyperparams, metadata_dir=None):
         self.model = self.model.train()
         mlflow.autolog()
 
@@ -85,7 +85,7 @@ class SBP:
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=150, gamma=0.1)
         nbands = len(self.bands)
 
-        loader_train, loader_val = create_dataloaders(
+        """loader_train, loader_val = create_dataloaders(
             path_data=data_dir,
             bands=self.bands,
             batch_size=batch_size,
@@ -93,8 +93,14 @@ class SBP:
             nexp=self.nexp,
             test_size=2,
             file_type="image",
-        )
+        )"""
 
+        loader_train, loader_val = create_dataloaders(
+            path_data=data_dir,
+            path_metadata=metadata_dir,
+            bands=self.bands,
+            nexp=self.nexp
+        )
         with mlflow.start_run():
             for epoch in range(nepochs):
                 progress_bar = tqdm(
