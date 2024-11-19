@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 import zarr
 from dataclasses import dataclass
+from functools import lru_cache
 
 @dataclass
 class DataSet:
@@ -36,6 +37,7 @@ class DataSet:
         """
         return len(list(self.zarr_store.group_keys()))
 
+    @lru_cache(maxsize=1000)
     def _load_image(self, i: int, 
                     band: str, 
                     exp: int) -> tuple[torch.FloatTensor, float]:
@@ -58,9 +60,10 @@ class DataSet:
 
         return stamp, max_stamp
 
-    def _load_metadata(self, i: int, band: str, exp: int) -> tuple[torch.FloatTensor, float, float]:
+    @lru_cache(maxsize=1000)
+    def _load_metadata(self, i: int, band: str, exp: int) -> tuple[float, float, float]:
         """
-        Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
+        Load metadata from file and return it as a tuple.
 
         Args:
             i (int): Data index.
@@ -68,11 +71,10 @@ class DataSet:
             exp (int): Exposure number.
 
         Returns:
-            torch.FloatTensor: The loaded image stamp.
-            float: The maximum value of the stamp.
+            tuple: z, f, zp values from metadata.
         """
         metadata = self.metadata_store[f"data_{i}"][f"metadata_{band}_exp{exp}"][:]
-        return metadata[:, 0], metadata[:, 1], metadata[:, 2] #z, f, zp
+        return metadata[0, 0], metadata[0, 1], metadata[0, 2]  # z, f, zp
 
     def __getitem__(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """
@@ -92,11 +94,10 @@ class DataSet:
             max_norm = 0
             for exp in range(self.nexp):
                 z, f, zp = self._load_metadata(i, b, exp)
-                meta[ib, exp] = torch.DoubleTensor(np.c_[z, f, zp])
+                meta[ib, exp] = torch.DoubleTensor([z, f, zp])
                 stamps[ib, exp], max_stamp = self._load_image(i, b, exp)
                 max_norm += max_stamp            
             max_norms[ib] = max_norm / self.nexp
             stamps[ib] = stamps[ib] / max_norms[ib]
         
         return meta, stamps, max_norms
-

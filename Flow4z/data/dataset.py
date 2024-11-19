@@ -75,7 +75,6 @@ class DataSet:
                 return self._get_multiple_exposures(i)
             else:
                 return self._get_single_exposure(i)
-        
         elif self.file_type == 'features':
             return self._get_features(i)
 
