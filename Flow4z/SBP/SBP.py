@@ -170,6 +170,7 @@ class SBP:
 
         loader_train, loader_val = create_dataloaders(
             path_data=data_dir,
+            path_metadata=metadata_dir,
             bands=self.bands,
             batch_size=training_hyperparams["batch_size"],
             zp_calib=self.zp_calib,
