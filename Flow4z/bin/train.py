@@ -27,7 +27,7 @@ def main():
 
     if config['photometry_type'] == 'SBP':
         script_name = 'SBP'
-        model = SBP(sbp_version = config['sbp_version'],
+        model = SBP.SBP(sbp_version = config['sbp_version'],
                           zp_calib=config['zp_calib'],
                           zp_calib_err=config['zp_calib_err'],
                           nexp = config['nexp'],
@@ -35,7 +35,7 @@ def main():
                          )
     elif config['photometry_type'] == 'MBP':
         script_name = 'MBP'
-        model = MBPz(
+        model = MBPz.MBPz(
             sbp_version=config['sbp_version'],
             mbp_version=config['mbp_version'],
             zp_calib_err=config['zp_calib_err'],
