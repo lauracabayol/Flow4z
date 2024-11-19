@@ -5,12 +5,8 @@ import torch
 from loguru import logger
 from pathlib import Path
 
-
-sys.path.append('../SBP')
-sys.path.append('../MBP')
-
-from SBP import SBP
-from MBPz import MBPz
+from Flow4z.SBP import SBP
+from Flow4z.MBP import MBPz
 
 
 def main():
