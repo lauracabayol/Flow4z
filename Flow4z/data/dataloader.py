@@ -40,54 +40,14 @@ def create_dataloaders(path_data: Path | str,
                     zp_calib_err=zp_calib_err,
                     file_type=file_type)
 
-    if test_size < len(dset):
+    if test_size<len(dset):
+        
         dset_train, dset_test = torch.utils.data.random_split(dset, [len(dset) - test_size, test_size])
-        
-        # Prefetch first few batches of training and validation data
-        prefetch_size = min(batch_size * 2, len(dset_train))
-        dset.prefetch_batch(list(range(prefetch_size)))
-        dset.prefetch_batch(list(range(len(dset) - test_size, len(dset))))
-
-        # Create DataLoaders with worker init function
-        def worker_init_fn(worker_id):
-            worker_info = torch.utils.data.get_worker_info()
-            if worker_info is None:  # single-process data loading
-                return
-            
-            dataset = worker_info.dataset
-            per_worker = len(dataset) // worker_info.num_workers
-            start_idx = worker_id * per_worker
-            end_idx = start_idx + per_worker
-            
-            # Prefetch this worker's chunk
-            if isinstance(dataset, torch.utils.data.Subset):
-                original_dataset = dataset.dataset
-                worker_indices = [dataset.indices[i] for i in range(start_idx, end_idx)]
-                original_dataset.prefetch_batch(worker_indices)
-            else:
-                dataset.prefetch_batch(range(start_idx, end_idx))
-
-        loader_val = DataLoader(dset_test, 
-                              batch_size=batch_size, 
-                              shuffle=False,
-                              worker_init_fn=worker_init_fn,
-                              num_workers=4)  # Adjust num_workers as needed
-        
-        loader_train = DataLoader(dset_train, 
-                                batch_size=batch_size, 
-                                shuffle=True,
-                                worker_init_fn=worker_init_fn,
-                                num_workers=4)  # Adjust num_workers as needed
-        
+        # Create DataLoader for the validation set
+        loader_val = DataLoader(dset_test, batch_size=batch_size, shuffle=False)
+        # Create DataLoader for the training set
+        loader_train = DataLoader(dset_train, batch_size=batch_size, shuffle=True)
         return loader_train, loader_val
     else:
-        # For single loader case
-        prefetch_size = min(batch_size * 2, len(dset))
-        dset.prefetch_batch(list(range(prefetch_size)))
-        
-        loader = DataLoader(dset, 
-                          batch_size=batch_size, 
-                          shuffle=False,
-                          worker_init_fn=worker_init_fn,
-                          num_workers=4)  # Adjust num_workers as needed
+        loader = DataLoader(dset, batch_size=batch_size, shuffle=False)
         return loader

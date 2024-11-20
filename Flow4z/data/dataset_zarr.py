@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 import zarr
 from dataclasses import dataclass
+from functools import lru_cache
 
 @dataclass
 class DataSet:
@@ -29,32 +30,37 @@ class DataSet:
     def __post_init__(self):
         self.zarr_store = zarr.open_group(self.data_dir, mode="r")
         self.metadata_store = zarr.open_group(self.metadata_dir, mode="r")
-        self._group_keys = list(self.zarr_store.group_keys())
 
     def __len__(self):
         """
         Returns the number of data files available in the dataset directory.
         """
-        return len(self._group_keys)
+        return len(list(self.zarr_store.group_keys()))
 
-    def prefetch_batch(self, indices):
-        """Pre-fetch data for a batch of indices to warm up the cache."""
-        for i in indices:
-            for band in self.bands:
-                for exp in range(self.nexp):
-                    self._load_metadata(i, band, exp)
-                    self._load_image(i, band, exp)
+    @lru_cache(maxsize=1000)
+    def _load_image(self, i: int, 
+                    band: str, 
+                    exp: int) -> tuple[torch.FloatTensor, float]:
+        """
+        Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
 
-                    
-    def _load_image(self, i: int, band: str, exp: int) -> tuple[torch.FloatTensor, float]:
-        # Use zarr array with memory mapping
-        stamp = self.zarr_store[f"data_{i}"][f"{band}_exp{exp}"].get_orthogonal_selection(())
+        Args:
+            i (int): Data index.
+            band (str): Band identifier.
+            exp (int): Exposure number.
+
+        Returns:
+            torch.FloatTensor: The loaded image stamp.
+            float: The maximum value of the stamp.
+        """
+        stamp = self.zarr_store[f"data_{i}"][f"{band}_exp{exp}"][:]
         stamp = np.nan_to_num(stamp)
         max_stamp = np.max(stamp)
         stamp = torch.FloatTensor(stamp)
+
         return stamp, max_stamp
 
-
+    @lru_cache(maxsize=1000)
     def _load_metadata(self, i: int, band: str, exp: int) -> tuple[float, float, float]:
         """
         Load metadata from file and return it as a tuple.
