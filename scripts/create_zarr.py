@@ -8,85 +8,81 @@ from loguru import logger
 
 def create_zarr_dataset(data_dir: Path, zarr_output: Path) -> None:
     """
-    Reads .npy files from multiple subdirectories and stores them in a single Zarr file.
-
-    Parameters:
-    - data_dir: str, the path to the directory containing the 10,000 subdirectories.
-    - zarr_output: str, the path to the Zarr file to store the combined data.
+    Reads .npy files and stores them in a single Zarr file, with each subdirectory
+    containing an array of shape (40, 3, 60, 60) representing all images.
     """
     logger.info(f'Creating Zarr dataset from {data_dir} to {zarr_output}')
-    # Initialize Zarr storage (root group)
     zarr_store = zarr.open_group(zarr_output, mode='w')
     total_subdirs = len(os.listdir(data_dir.as_posix()))
 
-    # Loop over each subdirectory with a progress bar
+    # Calculate dimensions
+    n_bands = len(range(455, 855, 10))  # 40 bands
+    n_exposures = 3
+    img_size = 60  # Assuming 60x60 images
+
     for subdir_idx in tqdm(range(total_subdirs), desc="Processing Subdirectories", unit="subdir"):
         subdir = data_dir / f'data_{subdir_idx}'
-
-        # Create a Zarr group for each subdirectory to store its .npy files
-        group_name = f'data_{subdir_idx}'
-        subdir_group = zarr_store.create_group(group_name)
-
-        # Loop over the files in each subdirectory
-        for band in range(455, 855, 10):
-            for exp in [0, 1, 2]:
+        
+        # Pre-allocate array for all images in this subdirectory
+        all_images = np.zeros((n_bands, n_exposures, img_size, img_size))
+        
+        # Fill the array
+        for i, band in enumerate(range(455, 855, 10)):
+            for j, exp in enumerate([0, 1, 2]):
                 file_name = f'cutout_pau_nb{band}_exp{exp}.npy'
                 file_path = subdir / file_name
-
-                # Load the .npy file
                 data = np.load(file_path)
+                all_images[i, j] = data
 
-                # Store each .npy file in its respective group within Zarr
-                zarr_dataset_name = f'nb{band}_exp{exp}'
-                subdir_group.create_dataset(zarr_dataset_name, data=data, chunks=True, overwrite=True)
+        # Store as a single dataset with appropriate chunking
+        chunk_size = (10, 3, 60, 60)  # Adjust these values as needed
+        zarr_store.create_dataset(f'data_{subdir_idx}', 
+                                data=all_images,
+                                chunks=chunk_size,
+                                overwrite=True)
 
     logger.info(f'Data successfully stored in {zarr_output}')
 
 def create_zarr_metadata(data_dir: Path, zarr_output: Path) -> None:
     """
-    Reads .npy files from multiple subdirectories and stores them in a single Zarr file.
-
-    Parameters:
-    - data_dir: str, the path to the directory containing the 10,000 subdirectories.
-    - zarr_output: str, the path to the Zarr file to store the combined data.
+    Creates a Zarr store where each subdirectory's metadata is stored as a single array
+    of shape (40, 3, 3) representing metadata for all bands and exposures.
     """
     logger.info(f'Creating Zarr metadata from {data_dir} to {zarr_output}')
-    # Initialize Zarr storage (root group)
     zarr_store = zarr.open_group(zarr_output, mode='w')
     total_subdirs = len(os.listdir(data_dir.as_posix()))
 
-    # Loop over each subdirectory with a progress bar
+    # Calculate dimensions
+    n_bands = len(range(455, 855, 10))  # 40 bands
+    n_exposures = 3
+    metadata_features = 3  # Assuming metadata has 3 features
+
     for subdir_idx in tqdm(range(total_subdirs), desc="Processing Subdirectories", unit="subdir"):
         subdir = data_dir / f'data_{subdir_idx}'
-
-        # Create a Zarr group for each subdirectory to store its metadata
-        group_name = f'data_{subdir_idx}'
-        subdir_group = zarr_store.create_group(group_name)
-
-        # Loop over the files in each subdirectory
-        for band in range(455, 855, 10):
-            for exp in [0, 1, 2]:
-                # Assuming the metadata filenames follow this format
+        
+        # Pre-allocate array for all metadata in this subdirectory
+        all_metadata = np.zeros((n_bands, n_exposures, metadata_features))
+        
+        # Fill the array
+        for i, band in enumerate(range(455, 855, 10)):
+            for j, exp in enumerate([0, 1, 2]):
                 metadata_file_name = f'metadata_pau_nb{band}_exp{exp}.npy'
                 metadata_file_path = subdir / metadata_file_name
-
-                # Load the metadata .npy file
                 metadata = np.load(metadata_file_path)
+                all_metadata[i, j] = metadata[0]  # Assuming metadata[0] contains the values
 
-                metadata_shape = (1,3) 
-                metadata_dataset_name = f'metadata_nb{band}_exp{exp}'
-                metadata_dataset = subdir_group.create_dataset(metadata_dataset_name, data=metadata, chunks=True, overwrite=True)
+        # Store as a single dataset with appropriate chunking
+        chunk_size = (10, 3, 3)  # Adjust these values as needed
+        dataset = zarr_store.create_dataset(f'data_{subdir_idx}', 
+                                          data=all_metadata,
+                                          chunks=chunk_size,
+                                          overwrite=True)
+        
+        # Add attributes if needed
+        dataset.attrs['bands'] = list(range(455, 855, 10))
+        dataset.attrs['exposures'] = [0, 1, 2]
 
-                # Store metadata as an array or object
-                metadata_dataset[0] = metadata[0]  
-
-                # Alternatively, add metadata as attributes if it's appropriate
-                metadata_dataset.attrs.update({
-                    'band': band,
-                    'exposure': exp,
-                })
-
-    logger.info(f'Data successfully stored in {zarr_output}')
+    logger.info(f'Metadata successfully stored in {zarr_output}')
 
 
 
