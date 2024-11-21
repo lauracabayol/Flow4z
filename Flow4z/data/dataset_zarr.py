@@ -97,7 +97,7 @@ class DataSet:
         for ib, b in enumerate(self.bands):
             max_norm = 0
             for exp in range(self.nexp):
-                z, f, zp = self._load_metadata(i, b, exp)
+                z, f, zp = self._load_metadata(i)
                 meta[ib, exp] = torch.DoubleTensor([z, f, zp])
                 stamps[ib, exp], max_stamp = self._load_image(i, b, exp)
                 max_norm += max_stamp            
