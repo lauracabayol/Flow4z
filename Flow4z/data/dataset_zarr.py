@@ -58,6 +58,7 @@ class DataSet:
         stamp = torch.FloatTensor(stamp)
 
         if sbp==True:
+            print("reshaping")
             stamp = stamp.reshape(self.nexp*len(self.bands), *self.stamp_shape)
             
         return stamp, max_stamp
