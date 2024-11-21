@@ -26,6 +26,7 @@ class DataSet:
     nexp: int = 3
     stamp_shape: tuple = (60, 60)
     size_meta: int = 3
+    sbp: bool = False
 
     def __post_init__(self):
         self.zarr_store = zarr.open_group(self.data_dir, mode="r")
@@ -97,9 +98,9 @@ class DataSet:
         for ib, b in enumerate(self.bands):
             max_norm = 0
             for exp in range(self.nexp):
-                z, f, zp = self._load_metadata(i)
+                z, f, zp = self._load_metadata(i, self.sbp)
                 meta[ib, exp] = torch.DoubleTensor([z, f, zp])
-                stamps[ib, exp], max_stamp = self._load_image(i, b, exp)
+                stamps[ib, exp], max_stamp = self._load_image(i, self.sbp)
                 max_norm += max_stamp            
             max_norms[ib] = max_norm / self.nexp
             stamps[ib] = stamps[ib] / max_norms[ib]
