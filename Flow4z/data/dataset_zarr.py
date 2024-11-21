@@ -37,10 +37,8 @@ class DataSet:
         """
         return len(list(self.zarr_store.group_keys()))
 
-    @lru_cache(maxsize=1000)
     def _load_image(self, i: int, 
-                    band: str, 
-                    exp: int) -> tuple[torch.FloatTensor, float]:
+                    sbp: bool) -> tuple[torch.FloatTensor, float]:
         """
         Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
 
@@ -53,15 +51,17 @@ class DataSet:
             torch.FloatTensor: The loaded image stamp.
             float: The maximum value of the stamp.
         """
-        stamp = self.zarr_store[f"data_{i}"][f"{band}_exp{exp}"][:]
+        stamp = self.zarr_store[f"data_{i}"][:]
         stamp = np.nan_to_num(stamp)
-        max_stamp = np.max(stamp)
+        max_stamp = np.max(stamp, axis=(2,3))
         stamp = torch.FloatTensor(stamp)
 
+        if sbp:
+            stamp = stamp.reshape(self.nexp*len(self.bands), *self.stamp_shape)
+            
         return stamp, max_stamp
 
-    @lru_cache(maxsize=1000)
-    def _load_metadata(self, i: int, band: str, exp: int) -> tuple[float, float, float]:
+    def _load_metadata(self, i: int, sbp: bool) -> tuple[float, float, float]:
         """
         Load metadata from file and return it as a tuple.
 
@@ -73,8 +73,12 @@ class DataSet:
         Returns:
             tuple: z, f, zp values from metadata.
         """
-        metadata = self.metadata_store[f"data_{i}"][f"metadata_{band}_exp{exp}"][:]
-        return metadata[0, 0], metadata[0, 1], metadata[0, 2]  # z, f, zp
+        metadata = self.metadata_store[f"data_{i}"][:]
+        if sbp:
+            metadata = metadata.reshape(self.nexp*len(self.bands), self.size_meta)
+            return metadata[:, 0], metadata[:, 1], metadata[:, 2]  # z, f, zp
+        else:
+            return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2]  # z, f, zp
 
     def __getitem__(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """
