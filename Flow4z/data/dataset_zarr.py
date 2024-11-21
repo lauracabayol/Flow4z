@@ -36,7 +36,7 @@ class DataSet:
         """
         Returns the number of data files available in the dataset directory.
         """
-        return len(list(self.zarr_store.group_keys()))
+        return len(self.zarr_store)
 
     def _load_image(self, i: int, 
                     sbp: bool) -> tuple[torch.FloatTensor, float]:
