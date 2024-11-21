@@ -92,17 +92,16 @@ class DataSet:
             tuple: Metadata, image stamps, and maximum norms.
         """
         stamps = torch.zeros(size=(len(self.bands), self.nexp, *self.stamp_shape))
-        meta = torch.zeros(size=(len(self.bands), self.nexp, self.size_meta))
         max_norms = torch.zeros(size=(len(self.bands), 1))
         
         for ib, b in enumerate(self.bands):
             max_norm = 0
-            for exp in range(self.nexp):
-                z, f, zp = self._load_metadata(i, self.sbp)
-                meta[ib, exp] = torch.DoubleTensor([z, f, zp])
-                stamps[ib, exp], max_stamp = self._load_image(i, self.sbp)
-                max_norm += max_stamp            
-            max_norms[ib] = max_norm / self.nexp
-            stamps[ib] = stamps[ib] / max_norms[ib]
+
+        meta= torch.DoubleTensor(self._load_metadata(i, self.sbp))
+        stamps, max_norms = self._load_image(i, self.sbp)
+
+        print(meta.shape, stamps.shape, max_norms.shape)
+
+        #stamps[ib] = stamps[ib] / max_norms[ib]
         
         return meta, stamps, max_norms
