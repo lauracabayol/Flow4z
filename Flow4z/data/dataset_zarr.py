@@ -57,10 +57,6 @@ class DataSet:
         max_stamp = np.max(stamp, axis=(2,3))
         stamp = torch.FloatTensor(stamp)
 
-        if sbp==True:
-            print("reshaping")
-            stamp = stamp.reshape(self.nexp*len(self.bands), *self.stamp_shape)
-            
         return stamp, max_stamp
 
     def _load_metadata(self, i: int, sbp: bool) -> tuple[float, float, float]:
@@ -76,11 +72,7 @@ class DataSet:
             tuple: z, f, zp values from metadata.
         """
         metadata = self.metadata_store[f"data_{i}"][:]
-        if sbp==True:
-            metadata = metadata.reshape(self.nexp*len(self.bands), self.size_meta)
-            return metadata[:, 0], metadata[:, 1], metadata[:, 2]  # z, f, zp
-        else:
-            return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2]  # z, f, zp
+        return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2]  # z, f, zp
 
     def __getitem__(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """
