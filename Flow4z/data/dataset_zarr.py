@@ -100,8 +100,6 @@ class DataSet:
         meta= torch.DoubleTensor(self._load_metadata(i, self.sbp))
         stamps, max_norms = self._load_image(i, self.sbp)
 
-        print(meta.shape, stamps.shape, max_norms.shape)
-
-        #stamps[ib] = stamps[ib] / max_norms[ib]
+        stamps = stamps/ max_norms[:,:,None,None]
         
         return meta, stamps, max_norms
