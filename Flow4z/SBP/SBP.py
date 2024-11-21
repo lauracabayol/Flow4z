@@ -80,7 +80,6 @@ class SBP:
             .unsqueeze(1)
             .float()
         )
-        print(stamp.shape)
         lab = lab[:, :, 0].reshape(len(lab) * nbands).unsqueeze(1)
         
         # Handle zero-point calibration

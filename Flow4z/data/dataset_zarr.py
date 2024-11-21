@@ -90,7 +90,7 @@ class DataSet:
         for ib, b in enumerate(self.bands):
             max_norm = 0
 
-        meta= torch.DoubleTensor(self._load_metadata(i, self.sbp))
+        meta= torch.Tensor(np.array(self._load_metadata(i, self.sbp)))
         stamps, max_norms = self._load_image(i, self.sbp)
 
         stamps = stamps/ max_norms[:,:,None,None]

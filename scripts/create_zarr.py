@@ -12,7 +12,7 @@ def create_zarr_dataset(data_dir: Path, zarr_output: Path) -> None:
     containing an array of shape (40, 3, 60, 60) representing all images.
     """
     logger.info(f'Creating Zarr dataset from {data_dir} to {zarr_output}')
-    zarr_store = zarr.open_group(zarr_output, mode='w')
+    zarr_store = zarr.open_group(zarr_output, mode='a')
     total_subdirs = len(os.listdir(data_dir.as_posix()))
 
     # Calculate dimensions
@@ -20,7 +20,8 @@ def create_zarr_dataset(data_dir: Path, zarr_output: Path) -> None:
     n_exposures = 3
     img_size = 60  # Assuming 60x60 images
 
-    for subdir_idx in tqdm(range(total_subdirs), desc="Processing Subdirectories", unit="subdir"):
+    #for subdir_idx in tqdm(range(total_subdirs), desc="Processing Subdirectories", unit="subdir"):
+    for subdir_idx in tqdm(range(5024,5025), desc="Processing Subdirectories", unit="subdir"):
         subdir = data_dir / f'data_{subdir_idx}'
         
         # Pre-allocate array for all images in this subdirectory
@@ -49,7 +50,7 @@ def create_zarr_metadata(data_dir: Path, zarr_output: Path) -> None:
     of shape (40, 3, 3) representing metadata for all bands and exposures.
     """
     logger.info(f'Creating Zarr metadata from {data_dir} to {zarr_output}')
-    zarr_store = zarr.open_group(zarr_output, mode='w')
+    zarr_store = zarr.open_group(zarr_output, mode='a')
     total_subdirs = len(os.listdir(data_dir.as_posix()))
 
     # Calculate dimensions
@@ -57,7 +58,8 @@ def create_zarr_metadata(data_dir: Path, zarr_output: Path) -> None:
     n_exposures = 3
     metadata_features = 3  # Assuming metadata has 3 features
 
-    for subdir_idx in tqdm(range(total_subdirs), desc="Processing Subdirectories", unit="subdir"):
+    #for subdir_idx in tqdm(range(total_subdirs), desc="Processing Subdirectories", unit="subdir"):
+    for subdir_idx in tqdm(range(9000,10000), desc="Processing Subdirectories", unit="subdir"):
         subdir = data_dir / f'data_{subdir_idx}'
         
         # Pre-allocate array for all metadata in this subdirectory
