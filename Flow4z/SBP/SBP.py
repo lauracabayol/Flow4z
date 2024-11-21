@@ -71,8 +71,7 @@ class SBP:
                        max_norm: torch.Tensor, 
                        nbands: int) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
         """Process a single batch of data."""
-        meta = meta.squeeze(1)
-        z, lab = meta[:, :, :, 0], meta[:, :, :, 1]
+        z, lab = meta[:, 0, :, :], meta[:, 1, :, :]
         lab = lab / max_norm
         
         # Reshape stamp and lab
@@ -87,7 +86,7 @@ class SBP:
         # Handle zero-point calibration
         zp = None
         if self.zp_calib:
-            zp = meta[:, :, :, 2]
+            zp = meta[:, 2, :, :]
             zp = zp * torch.normal(1, self.zp_calib_err / 100, size=zp.shape)
             zp = zp.reshape(len(zp) * nbands, self.nexp)
         
