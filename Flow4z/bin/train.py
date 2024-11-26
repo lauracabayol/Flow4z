@@ -8,7 +8,6 @@ from pathlib import Path
 from Flow4z.SBP import SBP
 from Flow4z.MBP import MBPz
 
-
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Train a neural network on a dataset.')

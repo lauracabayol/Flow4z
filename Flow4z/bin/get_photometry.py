@@ -1,4 +1,4 @@
-cleimport numpy as np
+import numpy as np
 import pandas as pd
 import argparse
 import sys
@@ -16,11 +16,8 @@ logger.add(sys.stderr, format="{time} {level} {message}", level="INFO")
 os.environ["MLFLOW_TRACKING_URI"] = "http://127.0.0.1:5000"
 client = MlflowClient()
 
-# Import SBP and MBPz modules
-sys.path.append("../SBP")
-sys.path.append("../MBP")
-from SBP import SBP
-from MBPz import MBPz
+from Flow4z.SBP import SBP
+from Flow4z.MBP import MBPz
 
 
 def main():
@@ -50,6 +47,14 @@ def main():
         required=False,
         help="MLFlow version of SBP trained model",
     )
+    parser.add_argument(
+        "--return_features",
+        type=bool,
+        required=False,
+        default=False,
+        help="Return features",
+    )
+
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -57,7 +62,7 @@ def main():
     mbp_version = args.mbp_version
     data_dir = args.data_dir
     sbp_version = args.sbp_version
-
+    return_features = args.return_features
     # Determine output file path
     dir_name = data_dir.rstrip("/").split("/")[-1]
 
@@ -77,10 +82,11 @@ def main():
             logger.info(
                 f"Running process_catalog with SBP model version: {sbp_version} and data directory: {data_dir}"
             )
-            model = SBP(sbp_version)
-            flux_predictions, flux_predictions_err, true_fluxes = model.process_catalog(data_dir)
+            model = SBP(restore = True, 
+                        sbp_version = sbp_version)
+            flux_predictions, flux_predictions_err, true_fluxes, features = model.process_catalog(data_dir, 
+                                                                                                  return_features)
 
-            
             output_file = f"/nfs/pic.es/user/l/lcabayol/AI/Flow4z/catalogs/SBP_{dir_name}_{sbp_version}.csv"
         elif photometry_type == "MBP":
             logger.info(

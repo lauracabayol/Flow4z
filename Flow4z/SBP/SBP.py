@@ -271,46 +271,28 @@ class SBP:
 
         logger.info("Loaders created")
 
-        for i, (m, stamp, max_norm) in enumerate(progress_bar):
-
-            # Reshape and move stamp to the appropriate device
-            stamp = (
-                stamp.reshape(len(stamp) * len(self.bands), 3, 60, 60)
-                .unsqueeze(1)
-                .float()
-                .to(self.device)
-            )
-
-            # Reshape max_norm
-            max_norm = max_norm.reshape(len(max_norm) * len(self.bands))
-
-            # Apply zero-point calibration if required
-            if self.zp_calib:
-                zp = m[:, :, :, 2]
-                zp = zp * torch.normal(1, self.zp_calib_err[0] / 100, size=zp.shape)
-                zp = zp.reshape(len(zp) * len(self.bands), 3).to(self.device)
-            else:         
-                zp = None
+        for i, (meta, stamp, max_norm) in enumerate(progress_bar):
+            nbands = len(self.bands)
+            
+            # Process the batch using _process_batch method
+            stamp, lab, zp = self._process_batch(meta, stamp, max_norm, nbands)
 
             flux_pred, fluxerr_pred, features = self.predict_flux(stamp, zp)
 
             if return_features:
-                logger.info("Saveing features")
-                features_path = f"{data_dir}/data_{i}/features_{i}_{self.zp_calib_err[0]}.npy"
+                logger.info("Saving features")
+                features_path = f"{data_dir}/data_{i}/features_{i}.npy"
                 np.save(features_path, features.detach().cpu().numpy())
 
-            # Denormalize flux predictions if necessary
-            flux_pred = flux_pred * max_norm.numpy()
-            fluxerr_pred = fluxerr_pred * max_norm.numpy()
+            # Denormalize flux predictions
+            flux_pred = flux_pred * max_norm.flatten().numpy()
+            fluxerr_pred = fluxerr_pred * max_norm.flatten().numpy()
 
             # Store the predictions and true values
             all_flux_predictions.append(flux_pred)
             all_fluxerr_predictions.append(fluxerr_pred)
-            
-            ftrue = (
-                m[:, :, 0, 1].reshape(len(m) * len(self.bands)).detach().cpu().numpy()
-            )
-            all_true_fluxes.append(ftrue)
+            all_true_fluxes.append(lab.flatten().numpy())
+
         # Convert lists to arrays and log final sizes
         all_flux_predictions = np.concatenate(all_flux_predictions)
         all_fluxerr_predictions = np.concatenate(all_fluxerr_predictions)
