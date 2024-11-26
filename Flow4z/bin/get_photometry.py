@@ -42,6 +42,12 @@ def main():
         help="Path to the directory with data to evaluate.",
     )
     parser.add_argument(
+        "--metadata_dir",
+        type=str,
+        required=False,
+        help="Path to the directory with metadata to evaluate.",
+    )
+    parser.add_argument(
         "--sbp_version",
         type=int,
         required=False,
@@ -61,6 +67,7 @@ def main():
     # Retrieve arguments
     mbp_version = args.mbp_version
     data_dir = args.data_dir
+    metadata_dir = args.metadata_dir
     sbp_version = args.sbp_version
     return_features = args.return_features
     # Determine output file path
@@ -79,6 +86,7 @@ def main():
         model = SBP(restore = True, 
                     sbp_version = sbp_version)
         flux_predictions, flux_predictions_err, true_fluxes, features = model.process_catalog(data_dir, 
+                                                                                                metadata_dir,
                                                                                                 return_features)
 
         output_file = f"/nfs/pic.es/user/l/lcabayol/AI/Flow4z/catalogs/SBP_{dir_name}_{sbp_version}.csv"
