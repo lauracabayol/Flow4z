@@ -252,7 +252,7 @@ class SBP:
 
 
     def process_catalog(self, data_dir: Path | str, 
-                        metadata_dir: Path | str],
+                        metadata_dir: Path | str,
                         return_features: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Process a catalog of images and return flux predictions."""
         all_flux_predictions = []
