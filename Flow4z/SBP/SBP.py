@@ -252,6 +252,7 @@ class SBP:
 
 
     def process_catalog(self, data_dir: Path | str, 
+                        metadata_dir: Path | str],
                         return_features: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Process a catalog of images and return flux predictions."""
         all_flux_predictions = []
@@ -260,12 +261,14 @@ class SBP:
 
         nobj = len(os.listdir(data_dir))
         loader = create_dataloaders(
-            data_dir,
+            path_data=data_dir,
+            path_metadata=metadata_dir,
             bands=self.bands,
-            batch_size=1,
+            batch_size=training_hyperparams["batch_size"],
             zp_calib=self.zp_calib,
+            nexp=self.nexp,
+            test_size=2,
             file_type="image",
-            test_size=nobj,
         )
         progress_bar = tqdm(loader, desc="Prediction Progress")
 
