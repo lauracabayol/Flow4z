@@ -59,11 +59,11 @@ class SBP:
 
             run_id = model_version_details.run_id
             run = client.get_run(run_id)
-            params = run.data.params   
+            self.params = run.data.params   
             
             self.model = mlflow.pytorch.load_model(model_uri)
-            self.nexp = params['nexp'],
-            self.zp_calib_err=eval(params['zp_calib_err']),
+            self.nexp = self.params['nexp'],
+            self.zp_calib_err=eval(self.params['zp_calib_err']),
             
 
     def _process_batch(self, meta: torch.Tensor, 
@@ -264,7 +264,7 @@ class SBP:
             path_data=data_dir,
             path_metadata=metadata_dir,
             bands=self.bands,
-            batch_size=training_hyperparams["batch_size"],
+            batch_size=self.params["batch_size"],
             zp_calib=self.zp_calib,
             nexp=self.nexp,
             test_size=2,
