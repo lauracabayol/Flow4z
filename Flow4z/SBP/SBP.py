@@ -264,7 +264,7 @@ class SBP:
             path_data=data_dir,
             path_metadata=metadata_dir,
             bands=self.bands,
-            batch_size=self.params["batch_size"],
+            batch_size=int(self.params["batch_size"]),
             zp_calib=self.zp_calib,
             nexp=self.nexp,
             test_size=2,
