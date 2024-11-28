@@ -85,7 +85,7 @@ def main():
         print("hello")
         model = SBP(restore = True, 
                     sbp_version = sbp_version,
-                    bands = [f"pau_nb{i}" for i in range(455,885,10)])
+                    bands = [f"pau_nb{i}" for i in range(455,855,10)])
         flux_predictions, flux_predictions_err, true_fluxes, features = model.process_catalog(data_dir, 
                                                                                                 metadata_dir,
                                                                                                 return_features)
