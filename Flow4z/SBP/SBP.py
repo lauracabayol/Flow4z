@@ -281,12 +281,19 @@ class SBP:
             stamp, lab, zp = self._process_batch(meta, stamp, max_norm, nbands)
 
             flux_pred, fluxerr_pred, features = self.predict_flux(stamp, zp)
-            assert False
 
             if return_features:
-                logger.info("Saving features")
-                features_path = f"{data_dir}/data_{i}/features_{i}.npy"
-                np.save(features_path, features.detach().cpu().numpy())
+                logger.info("Saving features to zarr file")
+                features_path = f"{data_dir}/features.zarr"
+                if i == 0:  # Create zarr file on first batch
+                    self.features_store = zarr.open(features_path, mode='a')                
+                # Get batch size from features tensor
+                batch_size = features.shape[0]
+                
+                # Store each sample's features in sequential groups
+                for j in range(batch_size*i, batch_size*(i+1)):
+                    group_name = f"data_{j}"
+                    self.features_store.create_dataset(group_name, data=features[j].detach().cpu().numpy())
 
             # Denormalize flux predictions
             flux_pred = flux_pred * max_norm.flatten().numpy()
