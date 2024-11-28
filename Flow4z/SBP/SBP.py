@@ -64,7 +64,7 @@ class SBP:
             
             self.model = mlflow.pytorch.load_model(model_uri)
             self.nexp = int(self.params['nexp'])
-            self.zp_calib_err=int(self.params['zp_calib_err']),
+            self.zp_calib_err=int(self.params['zp_calib_err'])[0],
             
 
     def _process_batch(self, meta: torch.Tensor, 
@@ -88,7 +88,7 @@ class SBP:
         zp = None
         if self.zp_calib:
             zp = meta[:, 2, :, :]
-            zp = zp * torch.normal(1, self.zp_calib_err[0] / 100, size=zp.shape)
+            zp = zp * torch.normal(1, self.zp_calib_err / 100, size=zp.shape)
             zp = zp.reshape(len(zp) * nbands, self.nexp).to(self.device)
         
         return stamp, lab, zp
