@@ -86,12 +86,12 @@ class DataSet:
         """
         stamps = torch.zeros(size=(len(self.bands), self.nexp, *self.stamp_shape))
         max_norms = torch.zeros(size=(len(self.bands), 1))
-        
+
         meta= torch.Tensor(np.array(self._load_metadata(i, self.sbp)))
         stamps, max_norms = self._load_image(i, self.sbp)
 
-        max_norm = torch.mean(max_norms, dim=1)
+        max_norm = np.mean(max_norms, axis=1)
 
-        stamps = stamps/ max_norms[:,None,None,None]
+        stamps = stamps/ max_norm[:,None,None,None]
         
         return meta, stamps, max_norm
