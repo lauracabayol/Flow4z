@@ -62,7 +62,7 @@ class SBP:
             self.params = run.data.params   
             
             self.model = mlflow.pytorch.load_model(model_uri)
-            self.nexp = self.params['nexp'],
+            self.nexp = int(self.params['nexp'])
             self.zp_calib_err=eval(self.params['zp_calib_err']),
             
 
