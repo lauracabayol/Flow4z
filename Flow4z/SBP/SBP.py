@@ -267,7 +267,7 @@ class SBP:
             batch_size=int(self.params["batch_size"]),
             zp_calib=self.zp_calib,
             nexp=self.nexp,
-            test_size=2,
+            test_size=nobj,
             file_type="image",
         )
         progress_bar = tqdm(loader, desc="Prediction Progress")
@@ -281,6 +281,7 @@ class SBP:
             stamp, lab, zp = self._process_batch(meta, stamp, max_norm, nbands)
 
             flux_pred, fluxerr_pred, features = self.predict_flux(stamp, zp)
+            assert False
 
             if return_features:
                 logger.info("Saving features")

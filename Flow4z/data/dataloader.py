@@ -3,6 +3,9 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 from typing import List
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 def create_dataloaders(path_data: Path | str, 
                        bands: List[str], 
                        path_metadata: Path | str = None,
@@ -25,12 +28,14 @@ def create_dataloaders(path_data: Path | str,
 
     # Create a DataSet instance based on the provided dataset directory
     if str(path_data).endswith('.zarr'):
+        logger.info("Using Zarr dataset")
         from Flow4z.data.dataset_zarr import DataSet
         dset = DataSet(data_dir=path_data,
                    metadata_dir=path_metadata,
                    bands=bands,
                    nexp=nexp)
     else:
+        logger.info("Using standard dataset")
         from Flow4z.data.dataset import DataSet
         dset = DataSet(data_dir=path_data,
                     bands=bands,
