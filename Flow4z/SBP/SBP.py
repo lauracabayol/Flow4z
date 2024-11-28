@@ -86,7 +86,7 @@ class SBP:
         zp = None
         if self.zp_calib:
             zp = meta[:, 2, :, :]
-            zp = zp * torch.normal(1, self.zp_calib_err / 100, size=zp.shape)
+            zp = zp * torch.normal(1, self.zp_calib_err[0] / 100, size=zp.shape)
             zp = zp.reshape(len(zp) * nbands, self.nexp)
         
         return stamp, lab, zp
