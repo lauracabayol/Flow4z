@@ -27,7 +27,7 @@ class DataSet:
     stamp_shape: tuple = (60, 60)
     size_meta: int = 3
     sbp: bool = False
-
+    file_type: str = 'image'
     def __post_init__(self):
         self.zarr_store = zarr.open_group(self.data_dir, mode="r")
         self.metadata_store = zarr.open_group(self.metadata_dir, mode="r")
@@ -45,8 +45,6 @@ class DataSet:
 
         Args:
             i (int): Data index.
-            band (str): Band identifier.
-            exp (int): Exposure number.
 
         Returns:
             torch.FloatTensor: The loaded image stamp.
@@ -58,6 +56,23 @@ class DataSet:
         stamp = torch.FloatTensor(stamp)
 
         return stamp, max_stamp
+    
+    def _load_features(self, i: int) -> torch.FloatTensor:
+        """
+        Load an image stamp from file and return it as a tensor along with the maximum value of the stamp.
+
+        Args:
+            i (int): Data index.
+
+        Returns:
+            torch.FloatTensor: The loaded image stamp.
+            float: The maximum value of the stamp.
+        """
+        features = self.zarr_store[f"data_{i}"][:]
+        features = np.nan_to_num(features)
+        features = torch.FloatTensor(features)
+
+        return features
 
     def _load_metadata(self, i: int, sbp: bool) -> tuple[float, float, float]:
         """
@@ -84,14 +99,15 @@ class DataSet:
         Returns:
             tuple: Metadata, image stamps, and maximum norms.
         """
-        stamps = torch.zeros(size=(len(self.bands), self.nexp, *self.stamp_shape))
-        max_norms = torch.zeros(size=(len(self.bands), 1))
+        if self.file_type == 'image':
+            stamps = torch.zeros(size=(len(self.bands), self.nexp, *self.stamp_shape))
+            max_norms = torch.zeros(size=(len(self.bands), 1))
+            stamps, max_norms = self._load_image(i, self.sbp)
+            max_norm = np.mean(max_norms, axis=1)
+            stamps = stamps/ max_norm[:,None,None,None]
+        elif self.file_type == 'features':
+            stamps = self._load_features(i)
 
         meta= torch.Tensor(np.array(self._load_metadata(i, self.sbp)))
-        stamps, max_norms = self._load_image(i, self.sbp)
-
-        max_norm = np.mean(max_norms, axis=1)
-
-        stamps = stamps/ max_norm[:,None,None,None]
         
         return meta, stamps, max_norm

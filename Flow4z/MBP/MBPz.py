@@ -87,7 +87,8 @@ class MBPz:
                     
         self.normflow = self.normflow.to(self.device)
 
-    def train(self, data_dir: Path | str, 
+    def train(self, path_data: Path | str, 
+              path_metadata: Path | str,
               training_hyperparams: dict):
         """
         Trains the normalizing flow model using the provided data.
@@ -98,8 +99,9 @@ class MBPz:
         logger.info("Creating data loaders...")
     
         loader_train, _ = create_dataloaders(
-            data_dir,
-            self.bands,
+            path_data=path_data,
+            path_metadata=path_metadata,
+            bands=self.bands,
             nexp=self.nexp,
             batch_size=training_hyperparams["batch_size"],
             zp_calib_err=self.zp_calib_err,

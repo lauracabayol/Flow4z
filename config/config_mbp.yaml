@@ -1,7 +1,8 @@
-sbp_version: 4
-mbp_version: null
+sbp_version: 2
+mbp_version: 1
 
-data_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/CFHT_sims_v3"
+data_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/PAUS_sims_test_v3_zarr.zarr"
+metadata_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/PAUS_sims_test_metadata_v3_zarr.zarr"
 photometry_type: 'MBP'
 
 multiple_exposures: True
@@ -13,12 +14,55 @@ output_model: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_MBP_mexp_v3.pt"
 file_type: "features"
 predict_photoz: False
 ntransformation: 8
+# bands: 
+#   - 'CFHT_U'
+#   - 'CFHT_G'
+#   - 'CFHT_R'
+#   - 'CFHT_I'
+#   - 'CFHT_Z'
+
 bands: 
-  - 'CFHT_U'
-  - 'CFHT_G'
-  - 'CFHT_R'
-  - 'CFHT_I'
-  - 'CFHT_Z'
+    - 'nb455'
+    - 'nb465'
+    - 'nb475'
+    - 'nb485'
+    - 'nb495'
+    - 'nb505'
+    - 'nb515'
+    - 'nb525'
+    - 'nb535'
+    - 'nb545'
+    - 'nb555'
+    - 'nb565'
+    - 'nb575'
+    - 'nb585'
+    - 'nb595'
+    - 'nb605'
+    - 'nb615'
+    - 'nb625'
+    - 'nb635'
+    - 'nb645'
+    - 'nb655'
+    - 'nb665'
+    - 'nb675'
+    - 'nb685'
+    - 'nb695'
+    - 'nb705'
+    - 'nb715'
+    - 'nb725'
+    - 'nb735'
+    - 'nb745'
+    - 'nb755'
+    - 'nb765'
+    - 'nb775'
+    - 'nb785'
+    - 'nb795'
+    - 'nb805'
+    - 'nb815'
+    - 'nb825'
+    - 'nb835'
+    - 'nb845'
+
 
 # Dictionary of hyperparameters
 hyperparams:

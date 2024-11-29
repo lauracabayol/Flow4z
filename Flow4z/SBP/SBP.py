@@ -64,7 +64,7 @@ class SBP:
             
             self.model = mlflow.pytorch.load_model(model_uri)
             self.nexp = int(self.params['nexp'])
-            self.zp_calib_err=int(self.params['zp_calib_err'])[0],
+            self.zp_calib_err=int(self.params['zp_calib_err'])
             
 
     def _process_batch(self, meta: torch.Tensor, 

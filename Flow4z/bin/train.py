@@ -49,9 +49,10 @@ def main():
     # Train model
     print("Starting model training...")
     trained_model = model.train(
-        data_dir=Path(config['data_dir']),
+        path_data=Path(config['data_dir']),
+        path_metadata=Path(config['metadata_dir']), 
         training_hyperparams=config['hyperparams'],
-        metadata_dir=Path(config['metadata_dir']))
+    )
     
     print("Model training completed.")
 
