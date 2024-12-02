@@ -1,8 +1,9 @@
 sbp_version: 2
 mbp_version: 1
+restore: False
 
-data_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/PAUS_sims_test_v3_zarr.zarr"
-metadata_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/PAUS_sims_test_metadata_v3_zarr.zarr"
+data_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/PAUS_sims_v3_zarr.zarr/features_v2.zarr"
+metadata_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/PAUS_sims_metadata+_v3_zarr.zarr"
 photometry_type: 'MBP'
 
 multiple_exposures: True
@@ -10,7 +11,7 @@ nexp: 3
 zp_calib: True
 zp_calib_err: 2
 verbose: true
-output_model: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/CFHT_MBP_mexp_v3.pt"
+output_model: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/PAUS_MBP_mexp_v3.pt"
 file_type: "features"
 predict_photoz: False
 ntransformation: 8
@@ -67,5 +68,5 @@ bands:
 # Dictionary of hyperparameters
 hyperparams:
   batch_size: 100         # Number of samples per batch during training
-  nepochs: 600             # Number of training epochs
+  nepochs: 1000             # Number of training epochs
   learning_rate: 0.001    # Learning rate for the optimizer

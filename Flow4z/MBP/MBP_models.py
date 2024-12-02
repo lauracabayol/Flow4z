@@ -14,12 +14,12 @@ def subnet_fc(dims_in, dims_out):
     )
 
 def NF_model_MBP(dim_inputSpace=5):
-    emulator = Ff.SequenceINN(dim_inputSpace)
+    emulator = Ff.SequenceINN(40)
     for _ in range(8):
         emulator.append(
             Fm.AllInOneBlock,
             cond=list(range(100)),
-            cond_shape=[50],
+            cond_shape=[400],
             subnet_constructor=subnet_fc,
         )
     return emulator
@@ -27,6 +27,7 @@ def NF_model_MBP(dim_inputSpace=5):
 def NF_model_MBPz(dim_inputSpace=6, dim_CondSpace=100, predict_photoz=True, ntransformation=8):
     nf = Ff.SequenceINN(dim_inputSpace)
     dim_feat = dim_inputSpace - 1 if predict_photoz else dim_inputSpace
+    print(dim_feat)
     
     for _ in range(ntransformation):
         nf.append(

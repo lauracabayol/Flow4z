@@ -85,7 +85,7 @@ class SBP:
         lab = lab.reshape(len(lab) * nbands).unsqueeze(1)
         
         # Handle zero-point calibration
-        zp = None
+        #zp = None
         if self.zp_calib:
             zp = meta[:, 2, :, :]
             zp = zp * torch.normal(1, self.zp_calib_err / 100, size=zp.shape)
@@ -261,18 +261,21 @@ class SBP:
         all_true_fluxes = []
         all_fluxerr_predictions = []
 
+        batch_size = int(self.params["batch_size"])
+
         nobj = len(os.listdir(data_dir))
         loader = create_dataloaders(
             path_data=data_dir,
             path_metadata=metadata_dir,
             bands=self.bands,
-            batch_size=int(self.params["batch_size"]),
+            batch_size=batch_size,
             zp_calib=self.zp_calib,
             nexp=self.nexp,
             test_size=nobj,
             file_type="image",
         )
         progress_bar = tqdm(loader, desc="Prediction Progress")
+        
 
         logger.info("Loaders created")
 
@@ -286,15 +289,14 @@ class SBP:
 
             if return_features:
                 logger.info("Saving features to zarr file")
-                features_path = f"{data_dir}/features.zarr"
+                features = features.reshape((batch_size, nbands, 10))
+                features_path = f"{data_dir}/features_v2.zarr"
                 if i == 0:  # Create zarr file on first batch
                     self.features_store = zarr.open(features_path, mode='a')                
-                # Get batch size from features tensor
-                batch_size = features.shape[0]
                 
                 # Store each sample's features in sequential groups
-                for j in range(batch_size*i, batch_size*(i+1)):
-                    group_name = f"data_{j}"
+                for j, k in zip(range(batch_size), range(batch_size*i, batch_size*(i+1))):
+                    group_name = f"data_{k}"
                     self.features_store.create_dataset(group_name, data=features[j].detach().cpu().numpy())
 
             # Denormalize flux predictions

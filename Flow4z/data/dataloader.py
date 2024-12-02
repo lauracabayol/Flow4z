@@ -33,7 +33,9 @@ def create_dataloaders(path_data: Path | str,
         dset = DataSet(data_dir=path_data,
                    metadata_dir=path_metadata,
                    bands=bands,
-                   nexp=nexp)
+                   nexp=nexp,
+                   file_type=file_type)
+
     else:
         logger.info("Using standard dataset")
         from Flow4z.data.dataset import DataSet

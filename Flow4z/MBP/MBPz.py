@@ -67,11 +67,12 @@ class MBPz:
         
             logger.info("Loading MBP model...")
             model_name = "MBP"
+            print(model_name, self.mbp_version)
             model_uri = f"models:/{model_name}/{self.mbp_version}"
             self.normflow  = mlflow.pytorch.load_model(model_uri).to(self.device)
 
             #access model parameters
-            model_version_details = client.get_model_version(model_name, self.mbp_version)
+            model_version_details = client.get_model_version("MBP", self.mbp_version)
             run_id = model_version_details.run_id
             run = client.get_run(run_id)
             params = run.data.params  
@@ -97,6 +98,7 @@ class MBPz:
         None (all necessary parameters are initialized in the __init__ method).
         """
         logger.info("Creating data loaders...")
+        nbands = len(self.bands)
     
         loader_train, _ = create_dataloaders(
             path_data=path_data,
@@ -120,23 +122,21 @@ class MBPz:
             progress_bar = tqdm(range(training_hyperparams["nepochs"]), desc="Training epochs", unit="epoch")
             for epoch in progress_bar:
                 epoch_loss = 0.0
+
                 for meta, data, max_norm in loader_train:
+                    z, lab = meta[:, 0, :, :], meta[:, 1, :, :]
+
+                    lab = lab[:, :, 0] / max_norm.mean(2)
+                    
                     optimizer.zero_grad()
     
                     if self.file_type == "image":
                         raise NotImplementedError("Predicting features from images is not supported")
-                        """features = torch.zeros(size=(len(data), self.nbands, 10))
-                        flab = meta[:, :, 0, 1] / max_norm[:, :, 0]
-                        for b in range(self.nbands):
-                            _, feature = self.model_sbp.predict_flux(self.model_sbp, data[:, b].unsqueeze(1))
-                            features[:, b] = feature.detach()
-                        features = features.view(len(features), -1)"""
                     else: 
-                        flab = meta[:, :, 0] / max_norm
                         features = data.view(len(data), -1)
 
-                    input_nf = torch.cat((flab, meta[:, 0:1, 1]), dim=1) if self.predict_photoz else flab
-    
+                    input_nf = torch.cat((llab, meta[:, 0:1, 1]), dim=1) if self.predict_photoz else lab
+
                     z, log_jac_det = self.normflow(
                         input_nf.to(self.device), features.to(self.device)
                     )
@@ -159,7 +159,7 @@ class MBPz:
                 self.normflow, artifact_path="model", registered_model_name="MBP"
             )
     
-            mlflow.set_tag("project", "MBP")
+            mlflow.set_tag("project", "Flow4z:MBP")
             mlflow.set_tag("input directory", f"{data_dir}")
             mlflow.set_tag("Model_SBP", f"{self.sbp_version}")
     

@@ -32,6 +32,8 @@ class DataSet:
         self.zarr_store = zarr.open_group(self.data_dir, mode="r")
         self.metadata_store = zarr.open_group(self.metadata_dir, mode="r")
 
+        print(self.metadata_store)
+
     def __len__(self):
         """
         Returns the number of data files available in the dataset directory.
@@ -87,7 +89,7 @@ class DataSet:
             tuple: z, f, zp values from metadata.
         """
         metadata = self.metadata_store[f"data_{i}"][:]
-        return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2]  # z, f, zp
+        return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2]#, metadata[:,:,3]  # z, f, zp, max
 
     def __getitem__(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """
@@ -105,9 +107,16 @@ class DataSet:
             stamps, max_norms = self._load_image(i, self.sbp)
             max_norm = np.mean(max_norms, axis=1)
             stamps = stamps/ max_norm[:,None,None,None]
-        elif self.file_type == 'features':
-            stamps = self._load_features(i)
+            meta= torch.Tensor(np.array(self._load_metadata(i, self.sbp)))
 
-        meta= torch.Tensor(np.array(self._load_metadata(i, self.sbp)))
+            return meta, stamps, max_norm
+            
+        elif self.file_type == 'features':
+
+            features = self._load_features(i)
+            meta= torch.Tensor(np.array(self._load_metadata(i, self.sbp)))
+            max_norm = meta[3]
+            
+            return meta, features, max_norm
         
-        return meta, stamps, max_norm
+        

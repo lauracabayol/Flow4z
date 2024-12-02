@@ -37,6 +37,7 @@ def main():
         model = MBPz.MBPz(
             sbp_version=config['sbp_version'],
             mbp_version=config['mbp_version'],
+            restore=config['restore'],
             zp_calib_err=config['zp_calib_err'],
             nexp=config.get('nexp', 3),  
             save_path=config['output_model'],
@@ -73,13 +74,13 @@ def main():
         }
     }
 
-    # Save the trained model with metadata
+    """# Save the trained model with metadata
     print(f"Saving the trained model with metadata to {config['output_model']}...")
     torch.save({
         'model_state_dict': trained_model.state_dict(),
         'metadata': metadata
     }, config['output_model'])
-    print("Model and metadata saved successfully.")
+    print("Model and metadata saved successfully.")"""
 
 if __name__ == '__main__':
     main()
