@@ -5,10 +5,11 @@ import argparse
 import sys
 import os
 import torch
-from loguru import logger
+import logging
 
-# Set up the Loguru logger
-logger.add(sys.stderr, format="{time} {level} {message}", level="INFO")
+from Flow4z.utils.logging_config import setup_logging
+logger = logging.getLogger(__name__)
+setup_logging()
 
 from Flow4z.SBP.SBP import SBP
 from Flow4z.MBP.MBPz import MBPz

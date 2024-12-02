@@ -5,8 +5,10 @@ from torch import nn
 import FrEIA.framework as Ff
 import FrEIA.modules as Fm
 import logging
+
+from Flow4z.utils.logging_config import setup_logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+setup_logging()
 
 def subnet_fc(dims_in, dims_out):
     return nn.Sequential(

@@ -3,12 +3,13 @@ import yaml
 import argparse
 import torch
 import logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 from pathlib import Path
 
 from Flow4z.SBP import SBP
 from Flow4z.MBP import MBPz
+from Flow4z.utils.logging_config import setup_logging
+logger = logging.getLogger(__name__)
+setup_logging()
 
 def main():
     # Parse command-line arguments

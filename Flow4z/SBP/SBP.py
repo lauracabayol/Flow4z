@@ -11,11 +11,9 @@ from typing import Optional, List, Tuple
 from pathlib import Path
 import zarr
 
-
 import mlflow
 import mlflow.pytorch
 from mlflow.tracking import MlflowClient
-client = MlflowClient()
 
 # Custom modules
 from Flow4z.SBP.SBP_models import SBP_model_multExp
@@ -37,6 +35,7 @@ class SBP:
 
     def __post_init__(self):
         """Initialize the SBP model with the option to load a pretrained model."""
+        client = MlflowClient()
 
         if self.mlflow_tracking_uri:
             mlflow.set_tracking_uri(self.mlflow_tracking_uri)
