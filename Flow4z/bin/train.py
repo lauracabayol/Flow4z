@@ -43,7 +43,7 @@ def main():
             sbp_version=config['sbp_version'],
             mbp_version=config['mbp_version'],
             restore=config['restore'],
-            zp_calib_err=config['zp_calib_err'],
+            zp_calib=config['zp_calib'],
             nexp=config.get('nexp', 3),  
             save_path=config['output_model'],
             file_type=config['file_type'],

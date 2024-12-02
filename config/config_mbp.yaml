@@ -8,8 +8,7 @@ photometry_type: 'MBP'
 
 multiple_exposures: True
 nexp: 3
-zp_calib: True
-zp_calib_err: 2
+zp_calib: 2
 verbose: true
 output_model: "/nfs/pic.es/user/l/lcabayol/AI/Flow4z/models/PAUS_MBP_mexp_v3.pt"
 file_type: "features"
