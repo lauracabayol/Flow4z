@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import os
 from tqdm import tqdm
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 import logging
 from pathlib import Path
@@ -26,7 +26,7 @@ class MBPz:
     sbp_version: str
     restore: bool = False
     mbp_version: str = None
-    bands: List[str] = ["CFHT_U", "CFHT_G", "CFHT_R", "CFHT_I", "CFHT_Z"]
+    bands: List[str] = field(default_factory=lambda: ["CFHT_U", "CFHT_G", "CFHT_R", "CFHT_I", "CFHT_Z"])
     nexp: int = 3
     save_path: str = None
     file_type: str = "features"
