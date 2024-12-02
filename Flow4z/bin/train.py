@@ -52,7 +52,6 @@ def main():
             restore=config['restore'],
             zp_calib=config['zp_calib'],
             nexp=config.get('nexp', 3),  
-            save_path=config['output_model'],
             file_type=config['file_type'],
             predict_photoz=config['predict_photoz'],
         )

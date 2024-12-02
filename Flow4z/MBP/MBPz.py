@@ -31,7 +31,6 @@ class MBPz:
     mbp_version: str = None
     bands: List[str] = field(default_factory=lambda: ["CFHT_U", "CFHT_G", "CFHT_R", "CFHT_I", "CFHT_Z"])
     nexp: int = 3
-    save_path: str = None
     file_type: str = "features"
     predict_photoz: bool = True
     zp_calib: int = 0
