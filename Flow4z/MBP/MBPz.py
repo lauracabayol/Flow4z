@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import torch
 import numpy as np
 import os
@@ -24,12 +26,12 @@ class MBPz:
     sbp_version: str
     restore: bool = False
     mbp_version: str = None
-    bands: List[str] = ["CFHT_U", "CFHT_G", "CFHT_R", "CFHT_I", "CFHT_Z"],
+    bands: List[str] = ["CFHT_U", "CFHT_G", "CFHT_R", "CFHT_I", "CFHT_Z"]
     nexp: int = 3
     save_path: str = None
     file_type: str = "features"
     predict_photoz: bool = True
-    zp_calib_err: int = 0
+    zp_calib: int = 0
     ntransformation: int = 8
     mlflow_tracking_uri: str = "http://127.0.0.1:5000"
 
@@ -53,7 +55,6 @@ class MBPz:
         self.model_sbp = mlflow.pytorch.load_model(model_uri).to(self.device)
 
         self.nbands = len(self.bands)
-        self.zp_calib_err = self.zp_calib_err
 
         # Initialize normalizing flow model
         logger.info("Initializing normalizing flow model...")
@@ -78,7 +79,7 @@ class MBPz:
             logger.info("Overwriting parameters to those of the loaded model...")
             self.predict_photoz = eval(params['predict_photoz'])
             self.batch_size = int(params['batch_size'])
-            self.zp_calib_err = int(params['zp_calib_error'])
+            self.zp_calib = int(params['zp_calib_error'])
             self.input_dim = self.nbands + 1 if self.predict_photoz else self.nbands
 
         else:
@@ -105,7 +106,7 @@ class MBPz:
             bands=self.bands,
             nexp=self.nexp,
             batch_size=training_hyperparams["batch_size"],
-            zp_calib_err=self.zp_calib_err,
+            zp_calib=self.zp_calib,
             file_type=self.file_type,
         )
 
@@ -167,8 +168,7 @@ class MBPz:
             mlflow.log_param("batch_size", training_hyperparams["batch_size"])
             mlflow.log_param("nepochs", training_hyperparams["nepochs"])
             mlflow.log_param("nexp", self.nexp)
-            mlflow.log_param("zp_calib", True)
-            mlflow.log_param("zp_calib_error", self.zp_calib_err)
+            mlflow.log_param("zp_calib", self.zp_calib)
             mlflow.log_param("predict_photoz", f"{self.predict_photoz}")
 
             logger.info("Training completed.")
@@ -176,6 +176,7 @@ class MBPz:
         return self.normflow
 
     def process_catalog(self, data_dir: Path | str,
+                        metadata_dir: Path | str,
                         Nrealizations: int = 100,
                         return_distributions: bool = False):
         """
@@ -195,17 +196,18 @@ class MBPz:
         self.normflow = self.normflow.eval()
         batch_size = 1
         logger.info(f"Predicting dataset with {Nrealizations} realizations per object...")
+        nobj = len(os.listdir(data_dir))
         loader_test = create_dataloaders(
             path_data=data_dir,
+            path_metadata=metadata_dir,
             nexp=self.nexp,
-            test_size=1000,
+            test_size=nobj,
             batch_size=batch_size,
             bands=self.bands,
-            zp_calib_err=self.zp_calib_err,
+            zp_calib=self.zp_calib,
             file_type='features',
         )
 
-        nobj = len(os.listdir(data_dir))
         preds_photometry_all = np.zeros(shape=(nobj, Nrealizations, self.nbands))
         photometry_true = np.zeros(shape=(nobj, self.nbands))
 
@@ -218,6 +220,7 @@ class MBPz:
 
             features = features.reshape(len(features), self.nbands * 10)
             condition = torch.tile(features, (Nrealizations, 1)).to(self.device)
+
             photometry_true[samp] = meta[:, :, 0]
             photoz_true[samp] = meta[:, 0, 1]
 
@@ -226,10 +229,10 @@ class MBPz:
 
             preds = preds.detach().cpu().numpy()
             if self.predict_photoz:
-                preds_photometry_all[samp] = preds[:, :-1] * max_norm.numpy()
+                preds_photometry_all[samp] = preds[:, :-1] * max_norm.mean(2).numpy()
                 preds_all_photoz[samp] = preds[:, -1]
             else:
-                preds_photometry_all[samp] = preds * max_norm.numpy()
+                preds_photometry_all[samp] = preds * max_norm.mean(2).numpy()
 
         if return_distributions:
             return preds_photometry_all, preds_all_photoz

@@ -17,7 +17,8 @@ setup_logging()
 os.environ["MLFLOW_TRACKING_URI"] = "http://127.0.0.1:5000"
 
 from Flow4z.SBP.SBP import SBP
-#from Flow4z.MBP.MBPz import MBPz
+from Flow4z.MBP.MBPz import MBPz
+from Flow4z.utils.mlflow_ui import start_mlflow_ui
 
 
 def main():
@@ -154,4 +155,5 @@ def main():
 
 
 if __name__ == "__main__":
+    start_mlflow_ui()
     main()

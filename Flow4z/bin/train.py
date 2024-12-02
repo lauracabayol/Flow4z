@@ -8,6 +8,8 @@ from pathlib import Path
 from Flow4z.SBP import SBP
 from Flow4z.MBP import MBPz
 from Flow4z.utils.logging_config import setup_logging
+from Flow4z.utils.mlflow_ui import start_mlflow_ui
+
 logger = logging.getLogger(__name__)
 setup_logging()
 
@@ -89,4 +91,5 @@ def main():
         logger.info("Model and metadata saved successfully.")
 
 if __name__ == '__main__':
+    start_mlflow_ui()
     main()
