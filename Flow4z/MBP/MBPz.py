@@ -3,16 +3,15 @@ import numpy as np
 import os
 from tqdm import tqdm
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 import logging
 from pathlib import Path
 import mlflow
 import mlflow.pytorch
+
 from mlflow.tracking import MlflowClient
-
-client = MlflowClient()
-
 from Flow4z.utils.logging_config import setup_logging
+
 from Flow4z.MBP.MBP_models import NF_model_MBPz
 from Flow4z.data.dataloader import create_dataloaders
 from Flow4z.SBP import SBP
@@ -25,7 +24,7 @@ class MBPz:
     sbp_version: str
     restore: bool = False
     mbp_version: str = None
-    bands: List[str] = ["CFHT_U", "CFHT_G", "CFHT_R", "CFHT_I", "CFHT_Z"]
+    bands: List[str] = ["CFHT_U", "CFHT_G", "CFHT_R", "CFHT_I", "CFHT_Z"],
     nexp: int = 3
     save_path: str = None
     file_type: str = "features"
@@ -40,6 +39,8 @@ class MBPz:
         Sets up device, loads SBP model, initializes normalizing flow model, and configures
         parameters like number of exposures, transformations, etc.
         """
+        client = MlflowClient()
+
         logger.info("Initializing MBPz model...")
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         if self.mlflow_tracking_uri:

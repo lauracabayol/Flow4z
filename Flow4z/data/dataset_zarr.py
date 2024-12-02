@@ -38,7 +38,7 @@ class DataSet:
         """
         Returns the number of data files available in the dataset directory.
         """
-        return len(self.zarr_store)
+        return len([k for k in self.zarr_store.keys() if k.startswith('data')])
 
     def _load_image(self, i: int, 
                     sbp: bool) -> tuple[torch.FloatTensor, float]:
@@ -92,7 +92,7 @@ class DataSet:
         if metadata.shape[2] > 3:
             return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2], metadata[:,:,3]  # z, f, zp, max
         else:
-            return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2], None  # z, f, zp
+            return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2]  # z, f, zp
 
     def __getitem__(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """

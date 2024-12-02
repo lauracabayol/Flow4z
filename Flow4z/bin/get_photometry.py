@@ -6,18 +6,25 @@ import sys
 import os
 import torch
 import logging
+from mlflow.tracking import MlflowClient
+client = MlflowClient()
+
 
 from Flow4z.utils.logging_config import setup_logging
 logger = logging.getLogger(__name__)
 setup_logging()
 
+os.environ["MLFLOW_TRACKING_URI"] = "http://127.0.0.1:5000"
+
 from Flow4z.SBP.SBP import SBP
-from Flow4z.MBP.MBPz import MBPz
+#from Flow4z.MBP.MBPz import MBPz
 
 
 def main():
     """Main function to run the process_catalog from the command line."""
     # Parse command-line arguments
+    client = MlflowClient()
+
     parser = argparse.ArgumentParser(
         description="Evaluate a neural network on a dataset."
     )
@@ -53,6 +60,8 @@ def main():
         help="Return features",
     )
 
+    client = MlflowClient()
+
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -64,6 +73,7 @@ def main():
     return_features = args.return_features
     # Determine output file path
     dir_name = data_dir.rstrip("/").split("/")[-1]
+    print(return_features)
 
     if mbp_version is None:
         photometry_type = "SBP"
@@ -84,7 +94,7 @@ def main():
         flux_predictions, flux_predictions_err, true_fluxes = model.process_catalog(
             data_dir,
             metadata_dir,
-            return_features
+            return_features = return_features
         )
 
         output_file = (
@@ -114,7 +124,8 @@ def main():
 
         # Run model to process catalog and generate predictions
         if eval(params['predict_photoz']):
-            flux_predictions, flux_predictions_err, true_fluxes, photoz, photoz_err, redsfhit = model.process_catalog(data_dir)
+            flux_predictions, flux_predictions_err, true_fluxes, photoz, photoz_err, redsfhit = model.process_catalog(data_dir,
+                                                                                                                     return_features=return_features)
             # Log results and save to file
             catz = pd.DataFrame(
                 np.c_[photoz.flatten(), photoz_err.flatten(), redsfhit.flatten()],
@@ -126,7 +137,8 @@ def main():
             )
             catz.to_csv(output_file_z, header=True, sep=",")
         else:
-            flux_predictions, flux_predictions_err, true_fluxes = model.process_catalog(data_dir)
+            flux_predictions, flux_predictions_err, true_fluxes = model.process_catalog(data_dir,
+                                                                                       return_features=return_features)
 
     # Log results and save to file
     cat = pd.DataFrame(

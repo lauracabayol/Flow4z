@@ -14,6 +14,7 @@ import zarr
 import mlflow
 import mlflow.pytorch
 from mlflow.tracking import MlflowClient
+client = MlflowClient()
 
 # Custom modules
 from Flow4z.SBP.SBP_models import SBP_model_multExp
@@ -22,6 +23,8 @@ from Flow4z.utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 setup_logging()
+os.environ["MLFLOW_TRACKING_URI"] = "http://127.0.0.1:5000"
+
 
 @dataclass
 class SBP:
@@ -274,6 +277,7 @@ class SBP:
             test_size=nobj,
             file_type="image",
         )
+        
         progress_bar = tqdm(loader, desc="Prediction Progress")
         
 
