@@ -19,9 +19,11 @@ def subnet_fc(dims_in, dims_out):
         nn.Linear(128, dims_out),
     )
 
-def NF_model_MBPz(dim_inputSpace=6, predict_photoz=True, ntransformation=8):
+def NF_model_MBPz(dim_inputSpace=40, predict_photoz=True, ntransformation=8):
+    
     nf = Ff.SequenceINN(dim_inputSpace)
     dim_feat = dim_inputSpace - 1 if predict_photoz else dim_inputSpace
+    print(dim_feat, dim_inputSpace)
     logger.info(f"Dimension of the features: {dim_feat}")
     
     for _ in range(ntransformation):

@@ -67,5 +67,5 @@ bands:
 # Dictionary of hyperparameters
 hyperparams:
   batch_size: 100         # Number of samples per batch during training
-  nepochs: 1000             # Number of training epochs
+  nepochs: 1             # Number of training epochs
   learning_rate: 0.001    # Learning rate for the optimizer

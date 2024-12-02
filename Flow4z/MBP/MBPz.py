@@ -13,6 +13,8 @@ import mlflow.pytorch
 
 from mlflow.tracking import MlflowClient
 from Flow4z.utils.logging_config import setup_logging
+client = MlflowClient()
+
 
 from Flow4z.MBP.MBP_models import NF_model_MBPz
 from Flow4z.data.dataloader import create_dataloaders
@@ -20,6 +22,7 @@ from Flow4z.SBP import SBP
 
 logger = logging.getLogger(__name__)
 setup_logging()
+os.environ["MLFLOW_TRACKING_URI"] = "http://127.0.0.1:5000"
 
 @dataclass
 class MBPz:
@@ -41,6 +44,8 @@ class MBPz:
         Sets up device, loads SBP model, initializes normalizing flow model, and configures
         parameters like number of exposures, transformations, etc.
         """
+        print(self.bands)
+        
         client = MlflowClient()
 
         logger.info("Initializing MBPz model...")
@@ -67,7 +72,6 @@ class MBPz:
 
             logger.info("Loading MBP model...")
             model_name = "MBP"
-            print(model_name, self.mbp_version)
             model_uri = f"models:/{model_name}/{self.mbp_version}"
             self.normflow = mlflow.pytorch.load_model(model_uri).to(self.device)
 
@@ -84,7 +88,8 @@ class MBPz:
 
         else:
             self.input_dim = self.nbands + 1 if self.predict_photoz else self.nbands
-            self.normflow = NF_model_MBPz(dim_inputSpace=self.input_dim)
+            self.normflow = NF_model_MBPz(dim_inputSpace=self.input_dim,
+                                         predict_photoz=self.predict_photoz)
 
         self.normflow = self.normflow.to(self.device)
 

@@ -1,20 +1,26 @@
 import sys
+import os
 import yaml
 import argparse
 import torch
 import logging
 from pathlib import Path
+from mlflow.tracking import MlflowClient
+client = MlflowClient()
 
-from Flow4z.SBP import SBP
-from Flow4z.MBP import MBPz
 from Flow4z.utils.logging_config import setup_logging
 from Flow4z.utils.mlflow_ui import start_mlflow_ui
 
 logger = logging.getLogger(__name__)
 setup_logging()
+os.environ["MLFLOW_TRACKING_URI"] = "http://127.0.0.1:5000"
+
+from Flow4z.SBP import SBP
+from Flow4z.MBP import MBPz
 
 def main():
-    # Parse command-line arguments
+    
+    client = MlflowClient()
     parser = argparse.ArgumentParser(description='Train a neural network on a dataset.')
     parser.add_argument('--config', type=str, required=True, help='Path to the config file.')
     args = parser.parse_args()
@@ -42,6 +48,7 @@ def main():
         model = MBPz.MBPz(
             sbp_version=config['sbp_version'],
             mbp_version=config['mbp_version'],
+            bands=config['bands'],
             restore=config['restore'],
             zp_calib=config['zp_calib'],
             nexp=config.get('nexp', 3),  
@@ -91,5 +98,5 @@ def main():
         logger.info("Model and metadata saved successfully.")
 
 if __name__ == '__main__':
-    start_mlflow_ui()
+    #start_mlflow_ui()
     main()
