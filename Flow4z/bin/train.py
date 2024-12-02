@@ -2,7 +2,9 @@ import sys
 import yaml
 import argparse
 import torch
-from loguru import logger
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 from pathlib import Path
 
 from Flow4z.SBP import SBP
@@ -15,13 +17,13 @@ def main():
     args = parser.parse_args()
 
     # Load the config file
-    print("Loading configuration file...")
+    logger.info("Loading configuration file...")
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-    print("Configuration file loaded successfully.")
+    logger.info("Configuration file loaded successfully.")
 
     # Set up the device (GPU or CPU)
-    print("Setting up the device...")
+    logger.info("Setting up the device...")
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     if config['photometry_type'] == 'SBP':
@@ -48,17 +50,17 @@ def main():
         raise ValueError(f"Unsupported photometry_type: {config['photometry_type']}. Please choose 'SBP' or 'MBP'.")
 
     # Train model
-    print("Starting model training...")
+    logger.info("Starting model training...")
     trained_model = model.train(
         path_data=Path(config['data_dir']),
         path_metadata=Path(config['metadata_dir']), 
         training_hyperparams=config['hyperparams'],
     )
     
-    print("Model training completed.")
+    logger.info("Model training completed.")
 
     # Prepare metadata including logs
-    print("Preparing metadata including logs...")
+    logger.info("Preparing metadata including logs...")
     metadata = {
         'model_metadata': {
             'script_name': script_name,
@@ -74,13 +76,16 @@ def main():
         }
     }
 
-    """# Save the trained model with metadata
-    print(f"Saving the trained model with metadata to {config['output_model']}...")
-    torch.save({
-        'model_state_dict': trained_model.state_dict(),
-        'metadata': metadata
-    }, config['output_model'])
-    print("Model and metadata saved successfully.")"""
+    # Save the trained model with metadata if output path exists
+    if 'output_model' not in config or not config['output_model']:
+        logger.warning("No output model path specified in config. Skipping model save.")
+    else:
+        logger.info(f"Saving the trained model with metadata to {config['output_model']}...")
+        torch.save({
+            'model_state_dict': trained_model.state_dict(),
+            'metadata': metadata
+        }, config['output_model'])
+        logger.info("Model and metadata saved successfully.")
 
 if __name__ == '__main__':
     main()

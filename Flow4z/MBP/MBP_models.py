@@ -1,8 +1,12 @@
+#! /usr/bin/env python
 """Models for the MBP (Model-Based Photometry) module."""
 import torch
 from torch import nn
 import FrEIA.framework as Ff
 import FrEIA.modules as Fm
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def subnet_fc(dims_in, dims_out):
     return nn.Sequential(
@@ -13,26 +17,15 @@ def subnet_fc(dims_in, dims_out):
         nn.Linear(128, dims_out),
     )
 
-def NF_model_MBP(dim_inputSpace=5):
-    emulator = Ff.SequenceINN(40)
-    for _ in range(8):
-        emulator.append(
-            Fm.AllInOneBlock,
-            cond=list(range(100)),
-            cond_shape=[400],
-            subnet_constructor=subnet_fc,
-        )
-    return emulator
-
-def NF_model_MBPz(dim_inputSpace=6, dim_CondSpace=100, predict_photoz=True, ntransformation=8):
+def NF_model_MBPz(dim_inputSpace=6, predict_photoz=True, ntransformation=8):
     nf = Ff.SequenceINN(dim_inputSpace)
     dim_feat = dim_inputSpace - 1 if predict_photoz else dim_inputSpace
-    print(dim_feat)
+    logger.info(f"Dimension of the features: {dim_feat}")
     
     for _ in range(ntransformation):
         nf.append(
             Fm.AllInOneBlock,
-            cond=list(range(dim_CondSpace)),
+            cond=list(range(100)),
             cond_shape=[10 * dim_feat],
             subnet_constructor=subnet_fc,
         )

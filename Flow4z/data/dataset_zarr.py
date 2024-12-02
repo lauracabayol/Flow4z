@@ -89,7 +89,10 @@ class DataSet:
             tuple: z, f, zp values from metadata.
         """
         metadata = self.metadata_store[f"data_{i}"][:]
-        return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2]#, metadata[:,:,3]  # z, f, zp, max
+        if metadata.shape[2] > 3:
+            return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2], metadata[:,:,3]  # z, f, zp, max
+        else:
+            return metadata[:,:, 0], metadata[:,:, 1], metadata[:,:, 2], None  # z, f, zp
 
     def __getitem__(self, i: int) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """
@@ -115,6 +118,8 @@ class DataSet:
 
             features = self._load_features(i)
             meta= torch.Tensor(np.array(self._load_metadata(i, self.sbp)))
+            if meta.shape[0] < 4:
+                raise ValueError("max_norm must be stored in metadata (4th column)")
             max_norm = meta[3]
             
             return meta, features, max_norm
