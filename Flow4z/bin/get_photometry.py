@@ -74,7 +74,6 @@ def main():
     return_features = args.return_features
     # Determine output file path
     dir_name = data_dir.rstrip("/").split("/")[-1]
-    print(return_features)
 
     if mbp_version is None:
         photometry_type = "SBP"
@@ -86,7 +85,6 @@ def main():
             f"Running process_catalog with SBP model version: {sbp_version} "
             f"and data directory: {data_dir}"
         )
-        print("hello")
         model = SBP(
             restore=True,
             sbp_version=sbp_version,
@@ -114,8 +112,10 @@ def main():
         params = run.data.params
 
         model = MBPz(
+            sbp_version=sbp_version,
             mbp_version=mbp_version,
             predict_photoz=eval(params['predict_photoz']),
+            bands=[f"pau_nb{i}" for i in range(455, 855, 10)],
             nexp=params['nexp'],
         )
         output_file = (
@@ -126,7 +126,7 @@ def main():
         # Run model to process catalog and generate predictions
         if eval(params['predict_photoz']):
             flux_predictions, flux_predictions_err, true_fluxes, photoz, photoz_err, redsfhit = model.process_catalog(data_dir,
-                                                                                                                     return_features=return_features)
+                                                                                                                     metadata_dir)                           
             # Log results and save to file
             catz = pd.DataFrame(
                 np.c_[photoz.flatten(), photoz_err.flatten(), redsfhit.flatten()],
@@ -139,7 +139,7 @@ def main():
             catz.to_csv(output_file_z, header=True, sep=",")
         else:
             flux_predictions, flux_predictions_err, true_fluxes = model.process_catalog(data_dir,
-                                                                                       return_features=return_features)
+                                                                                        metadata_dir)
 
     # Log results and save to file
     cat = pd.DataFrame(
@@ -155,5 +155,6 @@ def main():
 
 
 if __name__ == "__main__":
-    start_mlflow_ui()
+    #process = start_mlflow_ui()
     main()
+    #stop_mlflow_ui(process)

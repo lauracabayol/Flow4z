@@ -32,8 +32,6 @@ class DataSet:
         self.zarr_store = zarr.open_group(self.data_dir, mode="r")
         self.metadata_store = zarr.open_group(self.metadata_dir, mode="r")
 
-        print(self.metadata_store)
-
     def __len__(self):
         """
         Returns the number of data files available in the dataset directory.

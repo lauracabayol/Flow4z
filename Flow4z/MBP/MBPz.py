@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 import mlflow
 import mlflow.pytorch
+import zarr
 
 from mlflow.tracking import MlflowClient
 from Flow4z.utils.logging_config import setup_logging
@@ -82,7 +83,7 @@ class MBPz:
             logger.info("Overwriting parameters to those of the loaded model...")
             self.predict_photoz = eval(params['predict_photoz'])
             self.batch_size = int(params['batch_size'])
-            self.zp_calib = int(params['zp_calib_error'])
+            self.zp_calib = int(params['zp_calib'])
             self.input_dim = self.nbands + 1 if self.predict_photoz else self.nbands
 
         else:
@@ -200,7 +201,9 @@ class MBPz:
         self.normflow = self.normflow.eval()
         batch_size = 1
         logger.info(f"Predicting dataset with {Nrealizations} realizations per object...")
-        nobj = len(os.listdir(data_dir))
+
+        zarr_store = zarr.open_group(data_dir)
+        nobj = len([k for k in zarr_store.keys() if k.startswith('data')])
         loader_test = create_dataloaders(
             path_data=data_dir,
             path_metadata=metadata_dir,
@@ -225,8 +228,8 @@ class MBPz:
             features = features.reshape(len(features), self.nbands * 10)
             condition = torch.tile(features, (Nrealizations, 1)).to(self.device)
 
-            photometry_true[samp] = meta[:, :, 0]
-            photoz_true[samp] = meta[:, 0, 1]
+            photometry_true[samp] = meta[0, 1, :, 0]
+            photoz_true[samp] = meta[0, 2, 0, 0]
 
             z_test = torch.randn(Nrealizations, self.input_dim).to(self.device)
             preds, _ = self.normflow(z_test, condition, rev=True)
@@ -236,6 +239,7 @@ class MBPz:
                 preds_photometry_all[samp] = preds[:, :-1] * max_norm.mean(2).numpy()
                 preds_all_photoz[samp] = preds[:, -1]
             else:
+
                 preds_photometry_all[samp] = preds * max_norm.mean(2).numpy()
 
         if return_distributions:

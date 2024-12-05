@@ -1,6 +1,6 @@
 sbp_version: 2
-mbp_version: 1
-restore: False
+mbp_version: 6
+restore: True
 
 data_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/PAUS_sims_v3_zarr.zarr/features_v2.zarr"
 metadata_dir: "/data/astro/scratch/lcabayol/NFphotoz/data/PAUS_sims_metadata+_v3_zarr.zarr"
@@ -68,4 +68,4 @@ bands:
 hyperparams:
   batch_size: 100         # Number of samples per batch during training
   nepochs: 1000             # Number of training epochs
-  learning_rate: 0.001    # Learning rate for the optimizer
+  learning_rate: 0.0001    # Learning rate for the optimizer
