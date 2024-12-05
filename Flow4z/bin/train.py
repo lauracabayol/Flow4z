@@ -9,7 +9,7 @@ from mlflow.tracking import MlflowClient
 client = MlflowClient()
 
 from Flow4z.utils.logging_config import setup_logging
-from Flow4z.utils.mlflow_ui import start_mlflow_ui
+from Flow4z.utils.mlflow_ui import start_mlflow_ui, stop_mlflow_ui
 
 logger = logging.getLogger(__name__)
 setup_logging()
@@ -97,5 +97,6 @@ def main():
         logger.info("Model and metadata saved successfully.")
 
 if __name__ == '__main__':
-    #start_mlflow_ui()
+    process = start_mlflow_ui()
     main()
+    stop_mlflow_ui(process)
