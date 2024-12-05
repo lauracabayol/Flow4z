@@ -224,14 +224,22 @@ class MBPz:
         progress_bar = tqdm(loader_test, desc="Prediction Progress")
 
         for samp, (meta, features, max_norm) in enumerate(progress_bar):
+            # Move tensors to device
+            features = features.to(self.device)
+            meta = meta.to(self.device)
+            max_norm = max_norm.to(self.device)
 
-            features = features.reshape(len(features), self.nbands * 10)
-            condition = torch.tile(features, (Nrealizations, 1)).to(self.device)
+            # Reshape features correctly preserving batch dimension
+            features = features.reshape(features.size(0), -1)  # Flatten while keeping batch dim
+            condition = features.repeat_interleave(Nrealizations, dim=0)
 
-            photometry_true[samp] = meta[0, 1, :, 0]
-            photoz_true[samp] = meta[0, 2, 0, 0]
+            # Store true values
+            photometry_true[samp] = meta[0, 1, :, 0].cpu().numpy()
+            photoz_true[samp] = meta[0, 2, 0, 0].cpu().numpy()
+            # Generate predictions
+            #z_test = torch.randn(Nrealizations, self.input_dim).to(self.device)
+            z_test = torch.randn(Nrealizations * features.size(0), self.input_dim, device=self.device)
 
-            z_test = torch.randn(Nrealizations, self.input_dim).to(self.device)
             preds, _ = self.normflow(z_test, condition, rev=True)
 
             preds = preds.detach().cpu().numpy()
@@ -239,7 +247,6 @@ class MBPz:
                 preds_photometry_all[samp] = preds[:, :-1] * max_norm.mean(2).numpy()
                 preds_all_photoz[samp] = preds[:, -1]
             else:
-
                 preds_photometry_all[samp] = preds * max_norm.mean(2).numpy()
 
         if return_distributions:
