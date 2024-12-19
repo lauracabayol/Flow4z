@@ -118,7 +118,7 @@ class MBPz:
         optimizer = torch.optim.Adam(
             self.normflow.parameters(), lr=training_hyperparams["learning_rate"]
         )
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=150, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.1)
 
         with mlflow.start_run() as run:
             logger.info(
@@ -129,9 +129,9 @@ class MBPz:
                 epoch_loss = 0.0
 
                 for meta, data, max_norm in loader_train:
-                    z, lab = meta[:, 0, :, :], meta[:, 1, :, :]
+                    z, lab = meta[:, 0, :, :], meta[:, 1, :, :] 
 
-                    lab = lab[:, :, 0] / max_norm.mean(2)
+                    lab = lab[:, :, 0] #/ max_norm.mean(2).mean(1)[:,None]
 
                     optimizer.zero_grad()
 
@@ -230,24 +230,25 @@ class MBPz:
             max_norm = max_norm.to(self.device)
 
             # Reshape features correctly preserving batch dimension
-            features = features.reshape(features.size(0), -1)  # Flatten while keeping batch dim
+            features = features.reshape(features.size(0), -1)  
             condition = features.repeat_interleave(Nrealizations, dim=0)
 
             # Store true values
             photometry_true[samp] = meta[0, 1, :, 0].cpu().numpy()
             photoz_true[samp] = meta[0, 2, 0, 0].cpu().numpy()
             # Generate predictions
-            #z_test = torch.randn(Nrealizations, self.input_dim).to(self.device)
             z_test = torch.randn(Nrealizations * features.size(0), self.input_dim, device=self.device)
 
             preds, _ = self.normflow(z_test, condition, rev=True)
+            print(preds.mean(0))
+            assert False
 
             preds = preds.detach().cpu().numpy()
             if self.predict_photoz:
-                preds_photometry_all[samp] = preds[:, :-1] * max_norm.mean(2).numpy()
+                preds_photometry_all[samp] = preds[:, :-1]# * max_norm.mean(2).numpy()
                 preds_all_photoz[samp] = preds[:, -1]
             else:
-                preds_photometry_all[samp] = preds * max_norm.mean(2).numpy()
+                preds_photometry_all[samp] = preds * max_norm.mean(2).detach().cpu().numpy()
 
         if return_distributions:
             return preds_photometry_all, preds_all_photoz
